@@ -3,6 +3,7 @@ package com.weefic.xtun.server
 import com.weefic.xtun.ServerConnectionEstablishedEvent
 import com.weefic.xtun.ServerConnectionNegotiationFailedEvent
 import com.weefic.xtun.Tunnel
+import com.weefic.xtun.UserCredential
 import com.weefic.xtun.utils.getText
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
@@ -10,8 +11,13 @@ import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.*
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
+import java.util.*
 
-class ServerConnectionHttpProxyInboundHandler(val connectionId: Long, val host: String, val port: Int) : ChannelInboundHandlerAdapter() {
+class ServerConnectionHttpProxyInboundHandler(
+    val connectionId: Long,
+    val host: String, val port: Int,
+    val userCredential: UserCredential? = null,
+) : ChannelInboundHandlerAdapter() {
     companion object {
         private val LOG = LoggerFactory.getLogger("Server-Connection-HTTPProxy")
         const val HTTP_DECODER_NAME = "HTTP_DECODER"
@@ -25,7 +31,11 @@ class ServerConnectionHttpProxyInboundHandler(val connectionId: Long, val host: 
         super.channelActive(ctx)
         LOG.info(LOG_PREFIX, "Server connection negotiating")
         val request = DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.CONNECT, "$host:$port")
-        request.headers().add(HttpHeaderNames.HOST, this.host)
+        request.headers().set(HttpHeaderNames.HOST, this.host)
+        this.userCredential?.let {
+            val credential = Base64.getEncoder().encodeToString("${it.user}:${it.password}".encodeToByteArray())
+            request.headers().set(HttpHeaderNames.PROXY_AUTHORIZATION, "Basic $credential")
+        }
         ctx.pipeline().write(request).addListener {
             if (!it.isSuccess) {
                 LOG.warn(LOG_PREFIX, "Server connection negotiate failed", it.cause())

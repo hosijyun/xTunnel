@@ -13,7 +13,11 @@ import io.netty.handler.codec.socksx.v5.Socks5CommandStatus
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import org.slf4j.LoggerFactory
 
-class ServerConnectionSocks5InboundHandler(val connectionId: Long, val host: String, val port: Int, val credential: UserCredential?) : ByteToMessageDecoder() {
+class ServerConnectionSocks5InboundHandler(
+    val connectionId: Long,
+    val host: String, val port: Int,
+    val credential: UserCredential?
+) : ByteToMessageDecoder() {
     companion object {
         private val LOG = LoggerFactory.getLogger("Server-Connection-Socks5")
     }

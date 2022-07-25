@@ -16,7 +16,10 @@ import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.CharsetUtil
 import io.netty.util.NetUtil
 
-class ClientConnectionSocks5InboundHandler(connectionId: Long, val userCredential: UserCredential?) : ByteToMessageDecoder() {
+class ClientConnectionSocks5InboundHandler(
+    connectionId: Long,
+    val userCredential: UserCredential?
+) : ByteToMessageDecoder() {
     private enum class Status {
         Initialize,
         WaitAuthentication,
