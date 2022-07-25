@@ -1,7 +1,7 @@
 package com.weefic.xtun
 
-import com.weefic.xtun.client.ClientConnectionHttpProxyInboundHandler
-import com.weefic.xtun.client.ClientConnectionSocks5InboundHandler
+import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
+import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpRequestDecoder

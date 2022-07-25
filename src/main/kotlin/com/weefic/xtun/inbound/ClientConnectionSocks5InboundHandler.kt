@@ -1,8 +1,7 @@
-package com.weefic.xtun.client
+package com.weefic.xtun.inbound
 
-import com.weefic.xtun.ServerConnectionEstablishedEvent
-import com.weefic.xtun.ServerConnectionNegotiationFailedEvent
 import com.weefic.xtun.ServerConnectionRequest
+import com.weefic.xtun.ServerConnectionResult
 import com.weefic.xtun.UserCredential
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelFutureListener
@@ -163,35 +162,36 @@ class ClientConnectionSocks5InboundHandler(
     }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
-        if (evt is ServerConnectionEstablishedEvent && this.status == Status.WaitConnection) {
-            ctx.writeAndFlush(
-                ctx.alloc().buffer().writeBytes(
-                    byteArrayOf(
-                        SocksVersion.SOCKS5.byteValue(),
-                        Socks5CommandStatus.SUCCESS.byteValue(),
-                        0x0,
-                        Socks5AddressType.IPv4.byteValue(),
-                        0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0,
+        if (evt is ServerConnectionResult && this.status == Status.WaitConnection) {
+            if (evt == ServerConnectionResult.Success) {
+                ctx.writeAndFlush(
+                    ctx.alloc().buffer().writeBytes(
+                        byteArrayOf(
+                            SocksVersion.SOCKS5.byteValue(),
+                            Socks5CommandStatus.SUCCESS.byteValue(),
+                            0x0,
+                            Socks5AddressType.IPv4.byteValue(),
+                            0x0, 0x0, 0x0, 0x0,
+                            0x0, 0x0,
+                        )
                     )
                 )
-            )
-            ctx.pipeline().remove(this)
-        }
-        if (evt is ServerConnectionNegotiationFailedEvent && this.status == Status.WaitConnection) {
-            ctx.writeAndFlush(
-                ctx.alloc().buffer().writeBytes(
-                    byteArrayOf(
-                        SocksVersion.SOCKS5.byteValue(),
-                        Socks5CommandStatus.FAILURE.byteValue(),
-                        0x0,
-                        Socks5AddressType.IPv4.byteValue(),
-                        0x0, 0x0, 0x0, 0x0,
-                        0x0, 0x0,
+                ctx.pipeline().remove(this)
+            } else {
+                ctx.writeAndFlush(
+                    ctx.alloc().buffer().writeBytes(
+                        byteArrayOf(
+                            SocksVersion.SOCKS5.byteValue(),
+                            Socks5CommandStatus.FAILURE.byteValue(),
+                            0x0,
+                            Socks5AddressType.IPv4.byteValue(),
+                            0x0, 0x0, 0x0, 0x0,
+                            0x0, 0x0,
+                        )
                     )
                 )
-            )
-            ctx.pipeline().remove(this)
+                ctx.pipeline().remove(this)
+            }
         }
         super.userEventTriggered(ctx, evt)
     }

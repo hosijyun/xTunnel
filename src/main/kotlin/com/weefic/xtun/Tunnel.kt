@@ -19,7 +19,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
     }
 
     val connectionId = IDGenerator.incrementAndGet()
-    private val LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-$connectionId")
+    private val LOG_PREFIX = MARKERS.getDetachedMarker("-$connectionId")
 
     val clientConnection = ClientConnection(this, clientChannel)
     private var clientClosed = false
@@ -60,9 +60,9 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
         }
     }
 
-    fun serverConnectionNegotiationFailed() {
+    fun serverConnectionNegotiationFailed(why: ServerConnectionResult) {
         if (!this.clientClosed) {
-            this.clientConnection.channel.pipeline().fireUserEventTriggered(ServerConnectionNegotiationFailedEvent)
+            this.clientConnection.channel.pipeline().fireUserEventTriggered(why)
         }
     }
 
@@ -70,7 +70,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
         if (this.clientClosed) {
             serverConnection.channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
         } else {
-            this.clientConnection.channel.pipeline().fireUserEventTriggered(ServerConnectionEstablishedEvent)
+            this.clientConnection.channel.pipeline().fireUserEventTriggered(ServerConnectionResult.Success)
             this.serverConnection = serverConnection
             this.proxyToServerBuffer?.let {
                 for (msg in it) {

@@ -28,13 +28,14 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
                 LOG.debug(LOG_PREFIX, "Server read {} bytes", msg.readableBytes())
                 this.tunnel.writeToClient(msg)
             }
-            is ServerConnectionEstablishedEvent -> {
-                LOG.info(LOG_PREFIX, "Server connection established")
-                this.tunnel.serverConnectionEstablished(this)
-            }
-            is ServerConnectionNegotiationFailedEvent -> {
-                LOG.info(LOG_PREFIX, "Server connection failed")
-                this.tunnel.serverConnectionNegotiationFailed()
+            is ServerConnectionResult -> {
+                if (msg == ServerConnectionResult.Success) {
+                    LOG.info(LOG_PREFIX, "Server connection established")
+                    this.tunnel.serverConnectionEstablished(this)
+                } else {
+                    LOG.info(LOG_PREFIX, "Server connection failed")
+                    this.tunnel.serverConnectionNegotiationFailed(msg)
+                }
             }
             else -> {
                 LOG.debug(LOG_PREFIX, "Server read {} message", msg.javaClass)

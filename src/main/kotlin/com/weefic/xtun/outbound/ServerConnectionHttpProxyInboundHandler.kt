@@ -1,7 +1,6 @@
-package com.weefic.xtun.server
+package com.weefic.xtun.outbound
 
-import com.weefic.xtun.ServerConnectionEstablishedEvent
-import com.weefic.xtun.ServerConnectionNegotiationFailedEvent
+import com.weefic.xtun.ServerConnectionResult
 import com.weefic.xtun.Tunnel
 import com.weefic.xtun.UserCredential
 import com.weefic.xtun.utils.getText
@@ -73,11 +72,11 @@ class ServerConnectionHttpProxyInboundHandler(
                     if (this.connectionReceiveResponseCode == 200) {
                         this.connectionEstablished = true
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
-                        ctx.fireChannelRead(ServerConnectionEstablishedEvent)
+                        ctx.fireChannelRead(ServerConnectionResult.Success)
                         LOG.info(LOG_PREFIX, "Server negotiating finished. Ready for streaming.")
                     } else {
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
-                        ctx.fireChannelRead(ServerConnectionNegotiationFailedEvent)
+                        ctx.fireChannelRead(ServerConnectionResult.DataFlowInvalid)
                         ctx.close()
                     }
                 } else if (msg is HttpContent) {

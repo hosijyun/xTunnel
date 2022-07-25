@@ -2,9 +2,9 @@ package com.weefic.xtun
 
 import com.weefic.xtun.handlers.ConnectRequestHttpResponseDecoder
 import com.weefic.xtun.handlers.PureHttpRequestEncoder
-import com.weefic.xtun.server.ServerConnectionDirectInboundHandler
-import com.weefic.xtun.server.ServerConnectionHttpProxyInboundHandler
-import com.weefic.xtun.server.ServerConnectionSocks5InboundHandler
+import com.weefic.xtun.outbound.ServerConnectionDirectInboundHandler
+import com.weefic.xtun.outbound.ServerConnectionHttpProxyInboundHandler
+import com.weefic.xtun.outbound.ServerConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 

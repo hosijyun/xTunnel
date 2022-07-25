@@ -1,6 +1,9 @@
-package com.weefic.xtun.client
+package com.weefic.xtun.inbound
 
-import com.weefic.xtun.*
+import com.weefic.xtun.ServerConnectionRequest
+import com.weefic.xtun.ServerConnectionResult
+import com.weefic.xtun.Tunnel
+import com.weefic.xtun.UserCredential
 import com.weefic.xtun.utils.HttpProxyUtils
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelFutureListener
@@ -146,22 +149,23 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
     }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
-        if (evt is ServerConnectionEstablishedEvent && this.transferMode == TransferMode.ConnectStreaming) {
-            if (!this.serverConnectedVarConnect) {
-                this.serverConnectedVarConnect = true
-                LOG.info("Sending HTTP/1.1 200 Connection established")
-                ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray()))
+        if (evt is ServerConnectionResult && this.transferMode == TransferMode.ConnectStreaming) {
+            if (evt == ServerConnectionResult.Success) {
+                if (!this.serverConnectedVarConnect) {
+                    this.serverConnectedVarConnect = true
+                    LOG.info("Sending HTTP/1.1 200 Connection established")
+                    ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray()))
+                } else {
+                    LOG.warn("Duplicate ServerConnectionEstablishedEvent")
+                }
             } else {
-                LOG.warn("Duplicate ServerConnectionEstablishedEvent")
-            }
-        }
-        if (evt is ServerConnectionNegotiationFailedEvent && this.transferMode == TransferMode.ConnectStreaming) {
-            if (!this.serverConnectedVarConnect) {
-                this.serverConnectedVarConnect = true
-                LOG.info("Sending HTTP/1.1 502 Bad Gateway")
-                ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray()))
-            } else {
-                LOG.warn("Duplicate ServerConnectionNegotiationFailedEvent")
+                if (!this.serverConnectedVarConnect) {
+                    this.serverConnectedVarConnect = true
+                    LOG.info("Sending HTTP/1.1 502 Bad Gateway")
+                    ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 502 Bad Gateway\r\n\r\n".toByteArray()))
+                } else {
+                    LOG.warn("Duplicate ServerConnectionNegotiationFailedEvent")
+                }
             }
         }
         super.userEventTriggered(ctx, evt)

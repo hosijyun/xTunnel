@@ -1,7 +1,6 @@
-package com.weefic.xtun.server
+package com.weefic.xtun.outbound
 
-import com.weefic.xtun.ServerConnectionEstablishedEvent
-import com.weefic.xtun.ServerConnectionNegotiationFailedEvent
+import com.weefic.xtun.ServerConnectionResult
 import com.weefic.xtun.UserCredential
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
@@ -128,11 +127,11 @@ class ServerConnectionSocks5InboundHandler(
                 if (version == SocksVersion.SOCKS5) {
                     this.status = Status.Streaming
                     if (status == Socks5CommandStatus.SUCCESS) {
-                        ctx.fireChannelRead(ServerConnectionEstablishedEvent)
+                        ctx.fireChannelRead(ServerConnectionResult.Success)
                         ctx.pipeline().remove(this)
                     } else {
                         msg.readerIndex(msg.writerIndex())
-                        ctx.fireChannelRead(ServerConnectionNegotiationFailedEvent)
+                        ctx.fireChannelRead(ServerConnectionResult.DataFlowInvalid)
                         ctx.pipeline().remove(this)
                         ctx.close()
                     }
