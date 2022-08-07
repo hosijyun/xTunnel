@@ -12,11 +12,11 @@ fun xtun(config: Config) {
     val LOG = LoggerFactory.getLogger("Startup")
     val bossGroup = NioEventLoopGroup(1)
     val workerGroup = NioEventLoopGroup()
-    System.setProperty(ContextInitializer.CONFIG_FILE_PROPERTY, "./logback.xml")
-    ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID)
+
 
 
     try {
+        LOG.info("Starting services...")
         val bootstrap = ServerBootstrap()
         bootstrap
             .group(bossGroup, workerGroup)
@@ -26,8 +26,15 @@ fun xtun(config: Config) {
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .childOption(ChannelOption.AUTO_READ, false)
             .childHandler(ClientChannelInitializer(config))
-        val binds = config.tunnels.map {
-            bootstrap.bind("0.0.0.0", it.inbound.port)
+        val binds = config.tunnels.map { tunnelConfig ->
+            LOG.info("Binding {}", tunnelConfig.inbound.port)
+            bootstrap.bind("0.0.0.0", tunnelConfig.inbound.port).addListener {
+                if (it.isSuccess) {
+                    LOG.info("Port {} binded", tunnelConfig.inbound.port)
+                } else {
+                    LOG.warn("Failed to bind {}", tunnelConfig.inbound.port, it.cause())
+                }
+            }
         }
         for (bind in binds) {
             bind.sync()
@@ -43,6 +50,9 @@ fun xtun(config: Config) {
 }
 
 fun main() {
+    System.setProperty(ContextInitializer.CONFIG_FILE_PROPERTY, "./logback.xml")
+    ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID)
+
     val config = Config(
         listOf(
             TunnelConfig(TunnelInboundConfig.Socks5(8899, UserCredential("hello", "1")), TunnelOutboundConfig.Socks5("127.0.0.1", 1086))
