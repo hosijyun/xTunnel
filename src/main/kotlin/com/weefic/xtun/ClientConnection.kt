@@ -1,7 +1,6 @@
 package com.weefic.xtun
 
 import io.netty.buffer.ByteBuf
-import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.channel.socket.SocketChannel
@@ -9,17 +8,17 @@ import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 
 
-open class ClientConnection(private val tunnel: Tunnel, val channel: SocketChannel) : ChannelDuplexHandler() {
+class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : ChannelPeerConnection(channel) {
     companion object {
         private val LOG = LoggerFactory.getLogger("Client-Connection")
     }
 
     private val LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-${tunnel.connectionId}")
+    val eventLoop get() = this.channel.eventLoop()
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        LOG.info(LOG_PREFIX, "Client active")
-        ctx.read()
         super.channelActive(ctx)
+        LOG.info(LOG_PREFIX, "Client active")
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
@@ -42,7 +41,7 @@ open class ClientConnection(private val tunnel: Tunnel, val channel: SocketChann
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
         LOG.info(LOG_PREFIX, "Client read complete")
-        this.tunnel.flushServer()
+        this.tunnel.serverConnection?.flush()
         if (this.tunnel.serverWritable) {
             ctx.read()
         }
@@ -62,7 +61,7 @@ open class ClientConnection(private val tunnel: Tunnel, val channel: SocketChann
         super.channelInactive(ctx)
     }
 
-    fun serverWritableChanged() {
+    override fun peerWritableChanged() {
         if (this.tunnel.serverWritable && this.channel.isActive) {
             this.channel.read()
         }

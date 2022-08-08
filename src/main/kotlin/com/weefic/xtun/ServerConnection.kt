@@ -1,14 +1,13 @@
 package com.weefic.xtun
 
 import io.netty.buffer.ByteBuf
-import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.channel.socket.SocketChannel
 import org.slf4j.LoggerFactory
 
 
-class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : ChannelDuplexHandler() {
+class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeerConnection(channel) {
     companion object {
         val LOG = LoggerFactory.getLogger(ServerConnection::class.java)
     }
@@ -16,9 +15,8 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
     private var LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-${this.tunnel.connectionId}")
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        LOG.info(this.LOG_PREFIX, "Server Active")
-        ctx.read()
         super.channelActive(ctx)
+        LOG.info(this.LOG_PREFIX, "Server Active")
     }
 
 
@@ -26,7 +24,7 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
         when (msg) {
             is ByteBuf -> {
                 LOG.debug(LOG_PREFIX, "Server read {} bytes", msg.readableBytes())
-                this.tunnel.writeToClient(msg)
+                this.tunnel.clientConnection.write(msg)
             }
             is ServerConnectionResult -> {
                 if (msg == ServerConnectionResult.Success) {
@@ -39,14 +37,14 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
             }
             else -> {
                 LOG.debug(LOG_PREFIX, "Server read {} message", msg.javaClass)
-                this.tunnel.writeToClient(msg)
+                this.tunnel.clientConnection.write(msg)
             }
         }
     }
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
         LOG.info("Server read complete")
-        this.tunnel.flushClient()
+        this.tunnel.clientConnection.flush()
         if (this.tunnel.clientWritable) {
             ctx.read()
         }
@@ -62,12 +60,12 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
 
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        LOG.info("Server inactive")
         super.channelInactive(ctx)
+        LOG.info("Server inactive")
         this.tunnel.serverClosed()
     }
 
-    fun clientWritableChanged() {
+    override fun peerWritableChanged() {
         if (this.tunnel.clientWritable && this.channel.isActive) {
             this.channel.read()
         }
@@ -81,5 +79,6 @@ class ServerConnection(val tunnel: Tunnel, val channel: SocketChannel) : Channel
         }
         super.write(ctx, msg, promise)
     }
+
 
 }

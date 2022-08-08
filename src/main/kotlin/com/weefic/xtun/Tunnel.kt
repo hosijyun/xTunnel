@@ -1,8 +1,6 @@
 package com.weefic.xtun
 
 import io.netty.bootstrap.Bootstrap
-import io.netty.buffer.Unpooled
-import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
@@ -25,19 +23,19 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
     private var clientClosed = false
 
     private var connectServerRequested = false
-    private var serverConnection: ServerConnection? = null
+    var serverConnection: AbstractConnection? = null
     private var serverClosed = false
 
     private var proxyToServerBuffer: MutableList<Any>? = null
     var clientWritable = true
         set(value) {
             field = value
-            this.serverConnection?.clientWritableChanged()
+            this.serverConnection?.peerWritableChanged()
         }
     var serverWritable = false
         set(value) {
             field = value
-            this.clientConnection.serverWritableChanged()
+            this.clientConnection.peerWritableChanged()
         }
 
     fun connectServer(host: String, port: Int) {
@@ -46,7 +44,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
         val serverAddress = outboundConfig.getServerAddress(host, port)
         val serverConnectionBootstrap = Bootstrap()
         serverConnectionBootstrap
-            .group(this.clientConnection.channel.eventLoop())
+            .group(this.clientConnection.eventLoop)
             .channel(NioSocketChannel::class.java)
             .option(ChannelOption.AUTO_READ, false)
             .option(ChannelOption.SO_KEEPALIVE, true)
@@ -62,31 +60,26 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
 
     fun serverConnectionNegotiationFailed(why: ServerConnectionResult) {
         if (!this.clientClosed) {
-            this.clientConnection.channel.pipeline().fireUserEventTriggered(why)
+            this.clientConnection.triggerEvent(why)
         }
     }
 
     fun serverConnectionEstablished(serverConnection: ServerConnection) {
         if (this.clientClosed) {
-            serverConnection.channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+            serverConnection.close()
         } else {
-            this.clientConnection.channel.pipeline().fireUserEventTriggered(ServerConnectionResult.Success)
+            this.clientConnection.triggerEvent(ServerConnectionResult.Success)
             this.serverConnection = serverConnection
             this.proxyToServerBuffer?.let {
                 for (msg in it) {
-                    serverConnection.channel.write(msg).addListener {
-                        if (!it.isSuccess) {
-                            it.cause().printStackTrace()
-                        }
-                    }
+                    serverConnection.write(msg)
                 }
-                this.flushServer()
+                serverConnection.flush()
             }
             this.proxyToServerBuffer = null
             this.serverWritable = true
         }
     }
-
 
     fun writeToServer(message: Any) {
         val serverConnection = this.serverConnection
@@ -98,28 +91,8 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
             }
             buffer.add(message)
         } else {
-            serverConnection.channel.write(message).addListener {
-                if (!it.isSuccess) {
-                    it.cause().printStackTrace()
-                }
-            }
+            serverConnection.write(message)
         }
-    }
-
-    fun flushServer() {
-        this.serverConnection?.channel?.flush()
-    }
-
-    fun writeToClient(message: Any) {
-        this.clientConnection.channel.write(message).addListener {
-            if (!it.isSuccess) {
-                it.cause().printStackTrace()
-            }
-        }
-    }
-
-    fun flushClient() {
-        this.clientConnection.channel.flush()
     }
 
     fun clientClosed() {
@@ -131,10 +104,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
             }
         } else {
             if (this.connectServerRequested) {
-                val serverConnection = this.serverConnection
-                if (serverConnection != null) {
-                    serverConnection.channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
-                }
+                this.serverConnection?.close()
             } else {
                 this.serverClosed = true
                 this.closed()
@@ -151,7 +121,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
                 this.closed()
             }
         } else {
-            this.clientConnection.channel.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+            this.clientConnection.close()
         }
     }
 
