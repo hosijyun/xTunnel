@@ -17,6 +17,7 @@ import java.util.*
 class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredential: UserCredential?) : ChannelInboundHandlerAdapter() {
     companion object {
         const val HTTP_DECODER_NAME = "HTTP_DECODER"
+        const val HTTP_ENCODER_NAME = "HTTP_ENCODER"
         private val LOG = LoggerFactory.getLogger("Client-Connection-HTTPProxy")
     }
 

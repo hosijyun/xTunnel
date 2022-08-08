@@ -21,18 +21,16 @@ class ServerChannelInitializer(
             is TunnelOutboundConfig.Direct -> {
                 pipeline.addLast(ServerConnectionDirectInboundHandler())
                 pipeline.addLast(serverConnection)
-                pipeline.addLast(PureHttpRequestEncoder())
             }
             is TunnelOutboundConfig.Http -> {
                 pipeline.addLast(ServerConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, ConnectRequestHttpResponseDecoder())
                 pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetHost, this.targetPort, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
-                pipeline.addLast(PureHttpRequestEncoder())
+                pipeline.addLast(PureHttpRequestEncoder()) // Write CONNECT Request
             }
             is TunnelOutboundConfig.Socks5 -> {
                 pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetHost, this.targetPort, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
-                pipeline.addLast(PureHttpRequestEncoder())
             }
         }
     }

@@ -55,7 +55,7 @@ fun main() {
 
     val config = Config(
         listOf(
-            TunnelConfig(TunnelInboundConfig.Socks5(8899, UserCredential("hello", "1")), TunnelOutboundConfig.Socks5("127.0.0.1", 1086))
+            TunnelConfig(TunnelInboundConfig.Http(8899), TunnelOutboundConfig.Http("127.0.0.1", 1087))
         )
     )
     xtun(config)

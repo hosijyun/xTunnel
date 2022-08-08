@@ -1,5 +1,6 @@
 package com.weefic.xtun
 
+import com.weefic.xtun.handlers.InboundHttpRequestDecoder
 import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
@@ -25,6 +26,7 @@ class ClientChannelInitializer(val config: Config) : ChannelInitializer<SocketCh
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, tunnelConfig.inbound.credential))
+                pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_ENCODER_NAME, InboundHttpRequestDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
             is TunnelInboundConfig.Socks5 -> {
