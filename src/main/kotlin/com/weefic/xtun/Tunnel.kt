@@ -1,9 +1,6 @@
 package com.weefic.xtun
 
-import io.netty.bootstrap.Bootstrap
-import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
-import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.helpers.BasicMarkerFactory
@@ -40,18 +37,8 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
 
     fun connectServer(host: String, port: Int) {
         this.connectServerRequested = true
-        val outboundConfig = this.config.outbound
-        val serverAddress = outboundConfig.getServerAddress(host, port)
-        val serverConnectionBootstrap = Bootstrap()
-        serverConnectionBootstrap
-            .group(this.clientConnection.eventLoop)
-            .channel(NioSocketChannel::class.java)
-            .option(ChannelOption.AUTO_READ, false)
-            .option(ChannelOption.SO_KEEPALIVE, true)
-            .handler(ServerChannelInitializer(this, outboundConfig, host, port))
-        val serverConnectionFuture = serverConnectionBootstrap.connect(serverAddress)
-        serverConnectionFuture.addListener { future ->
-            if (!future.isSuccess) {
+        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.config.outbound, host, port) { isSuccess ->
+            if (!isSuccess) {
                 LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", host, port)
                 this.serverClosed()
             }
