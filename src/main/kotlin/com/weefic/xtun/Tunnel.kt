@@ -4,6 +4,7 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.helpers.BasicMarkerFactory
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicLong
 
 class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
@@ -35,11 +36,11 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
             this.clientConnection.peerWritableChanged()
         }
 
-    fun connectServer(host: String, port: Int) {
+    fun connectServer(address: InetSocketAddress) {
         this.connectServerRequested = true
-        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.config.outbound, host, port) { isSuccess ->
+        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.config.outbound, address) { isSuccess ->
             if (!isSuccess) {
-                LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", host, port)
+                LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
                 this.serverClosed()
             }
         }

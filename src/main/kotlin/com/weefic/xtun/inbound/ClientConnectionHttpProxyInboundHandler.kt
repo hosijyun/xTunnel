@@ -12,6 +12,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.*
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
+import java.net.InetSocketAddress
 import java.util.*
 
 class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredential: UserCredential?) : ChannelInboundHandlerAdapter() {
@@ -28,7 +29,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
         object Undetermined : TransferMode()
         object Terminated : TransferMode()
         object HttpMessaging : TransferMode()
-        data class ConnectNegotiating(val host: String, val port: Int) : TransferMode()
+        data class ConnectNegotiating(val address: InetSocketAddress) : TransferMode()
         object ConnectStreaming : TransferMode()
     }
 
@@ -64,17 +65,18 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                         headers.remove(HttpHeaderNames.PROXY_CONNECTION)
                         headers.remove(HttpHeaderNames.PROXY_AUTHORIZATION)
                         val (host, port) = this.identifyHostAndPort(obj)
+                        val address = InetSocketAddress.createUnresolved(host, port)
                         LOG.info(LOG_PREFIX, "Request accepted with method '{}', destination server is {}:{} ", obj.method(), host, port)
                         if (obj.method() == HttpMethod.CONNECT) {
                             // 使用CONNECT模式
                             LOG.info(LOG_PREFIX, "Connection is negotiating.")
-                            this.transferMode = TransferMode.ConnectNegotiating(host, port)
+                            this.transferMode = TransferMode.ConnectNegotiating(address)
                             ReferenceCountUtil.release(obj)
                         } else {
                             // 使用非CONNECT模式
                             LOG.info(LOG_PREFIX, "Ready for connect destination server using HTTP-Message mode")
                             this.transferMode = TransferMode.HttpMessaging
-                            ctx.fireChannelRead(ServerConnectionRequest(host, port))
+                            ctx.fireChannelRead(ServerConnectionRequest(address))
                             ctx.fireChannelRead(obj)
                         }
                     } else {
@@ -94,7 +96,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                     is LastHttpContent -> {
                         LOG.info(LOG_PREFIX, "Negotiation finished. Ready for connect destination server.")
                         this.transferMode = TransferMode.ConnectStreaming
-                        ctx.fireChannelRead(ServerConnectionRequest(transferMode.host, transferMode.port))
+                        ctx.fireChannelRead(ServerConnectionRequest(transferMode.address))
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
                         ReferenceCountUtil.release(obj)
                     }

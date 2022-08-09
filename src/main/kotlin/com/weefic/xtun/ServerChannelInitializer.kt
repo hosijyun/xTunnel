@@ -7,12 +7,12 @@ import com.weefic.xtun.outbound.ServerConnectionHttpProxyInboundHandler
 import com.weefic.xtun.outbound.ServerConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
+import java.net.InetSocketAddress
 
 class ServerChannelInitializer(
     val tunnel: Tunnel,
     val outboundConfig: TunnelOutboundConfig,
-    val targetHost: String,
-    val targetPort: Int,
+    val targetAddress: InetSocketAddress,
 ) : ChannelInitializer<SocketChannel>() {
     override fun initChannel(ch: SocketChannel) {
         val pipeline = ch.pipeline()
@@ -24,12 +24,12 @@ class ServerChannelInitializer(
             }
             is TunnelOutboundConfig.Http -> {
                 pipeline.addLast(ServerConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, ConnectRequestHttpResponseDecoder())
-                pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetHost, this.targetPort, this.outboundConfig.credential))
+                pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
                 pipeline.addLast(PureHttpRequestEncoder()) // Write CONNECT Request
             }
             is TunnelOutboundConfig.Socks5 -> {
-                pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetHost, this.targetPort, this.outboundConfig.credential))
+                pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
             }
         }

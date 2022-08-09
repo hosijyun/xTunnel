@@ -2,11 +2,13 @@ package com.weefic.xtun
 
 import ch.qos.logback.classic.util.ContextInitializer
 import io.netty.bootstrap.ServerBootstrap
+import io.netty.channel.Channel
 import io.netty.channel.ChannelOption
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.util.ResourceLeakDetector
 import org.slf4j.LoggerFactory
+import java.net.InetSocketAddress
 
 fun xtun(config: Config) {
     val LOG = LoggerFactory.getLogger("Startup")
@@ -53,8 +55,15 @@ fun main() {
     System.setProperty(ContextInitializer.CONFIG_FILE_PROPERTY, "./logback.xml")
     ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID)
 
+    val route = object : DynamicRoute {
+        override fun route(channel: Channel): InetSocketAddress? {
+            return InetSocketAddress.createUnresolved("www.baidu.com", 80)
+        }
+    }
+
     val config = Config(
         listOf(
+            TunnelConfig(TunnelInboundConfig.Dynamic(8881, route), TunnelOutboundConfig.Direct),
             TunnelConfig(TunnelInboundConfig.Http(8899), TunnelOutboundConfig.Http("127.0.0.1", 1087))
         )
     )

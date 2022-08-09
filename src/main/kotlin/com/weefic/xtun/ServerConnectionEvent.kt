@@ -1,6 +1,8 @@
 package com.weefic.xtun
 
-class ServerConnectionRequest(val host: String, val port: Int)
+import java.net.InetSocketAddress
+
+class ServerConnectionRequest(val address: InetSocketAddress)
 
 enum class ServerConnectionResult {
     Success,

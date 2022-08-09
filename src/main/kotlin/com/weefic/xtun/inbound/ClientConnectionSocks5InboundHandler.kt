@@ -14,6 +14,7 @@ import io.netty.handler.codec.socksx.v5.Socks5CommandStatus
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.CharsetUtil
 import io.netty.util.NetUtil
+import java.net.InetSocketAddress
 
 class ClientConnectionSocks5InboundHandler(
     connectionId: Long,
@@ -150,7 +151,7 @@ class ClientConnectionSocks5InboundHandler(
                 }
                 val port = msg.readUnsignedShort()
                 if (version == SocksVersion.SOCKS5 && command == Socks5CommandType.CONNECT) {
-                    ctx.fireChannelRead(ServerConnectionRequest(host, port))
+                    ctx.fireChannelRead(ServerConnectionRequest(InetSocketAddress.createUnresolved(host, port)))
                     this.status = Status.WaitConnection
                 } else {
                     msg.readerIndex(msg.writerIndex())

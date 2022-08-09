@@ -1,6 +1,7 @@
 package com.weefic.xtun
 
 import com.weefic.xtun.handlers.InboundHttpRequestDecoder
+import com.weefic.xtun.inbound.ClientConnectionDynamicInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
@@ -22,15 +23,19 @@ class ClientChannelInitializer(val config: Config) : ChannelInitializer<SocketCh
         }
         val pipeline = clientChannel.pipeline()
         val tunnel = Tunnel(tunnelConfig, clientChannel)
-        when (tunnelConfig.inbound) {
+        when (val inbound = tunnelConfig.inbound) {
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
-                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, tunnelConfig.inbound.credential))
+                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.credential))
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_ENCODER_NAME, InboundHttpRequestDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
             is TunnelInboundConfig.Socks5 -> {
-                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, tunnelConfig.inbound.credential))
+                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credential))
+                pipeline.addLast(tunnel.clientConnection)
+            }
+            is TunnelInboundConfig.Dynamic -> {
+                pipeline.addLast(ClientConnectionDynamicInboundHandler(tunnel.connectionId, inbound.router))
                 pipeline.addLast(tunnel.clientConnection)
             }
         }
