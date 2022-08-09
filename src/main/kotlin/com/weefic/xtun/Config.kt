@@ -1,7 +1,5 @@
 package com.weefic.xtun
 
-import java.net.InetSocketAddress
-
 
 data class UserCredential(val user: String, val password: String)
 
@@ -11,25 +9,9 @@ sealed class TunnelInboundConfig(val port: Int) {
 }
 
 sealed class TunnelOutboundConfig() {
-    abstract fun getServerAddress(host: String, port: Int): InetSocketAddress
-
-    object Direct : TunnelOutboundConfig() {
-        override fun getServerAddress(host: String, port: Int): InetSocketAddress {
-            return InetSocketAddress(host, port)
-        }
-    }
-
-    data class Http(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig() {
-        override fun getServerAddress(host: String, port: Int): InetSocketAddress {
-            return InetSocketAddress(this.host, this.port)
-        }
-    }
-
-    data class Socks5(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig() {
-        override fun getServerAddress(host: String, port: Int): InetSocketAddress {
-            return InetSocketAddress(this.host, this.port)
-        }
-    }
+    object Direct : TunnelOutboundConfig()
+    data class Http(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
+    data class Socks5(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
 }
 
 class TunnelConfig(
