@@ -32,6 +32,8 @@ class ServerChannelInitializer(
                 pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
             }
+            TunnelOutboundConfig.Blackhole -> throw UnsupportedOperationException("Blackhole unsupported")
+            TunnelOutboundConfig.Echo -> throw UnsupportedOperationException("Echo unsupported")
         }
     }
 }

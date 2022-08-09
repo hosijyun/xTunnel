@@ -63,7 +63,7 @@ fun main() {
 
     val config = Config(
         listOf(
-            TunnelConfig(TunnelInboundConfig.Dynamic(8881, route), TunnelOutboundConfig.Direct),
+            TunnelConfig(TunnelInboundConfig.Dynamic(8881, route), TunnelOutboundConfig.Echo),
             TunnelConfig(TunnelInboundConfig.Http(8899), TunnelOutboundConfig.Http("127.0.0.1", 1087))
         )
     )

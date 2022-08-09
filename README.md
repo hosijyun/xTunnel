@@ -12,5 +12,7 @@ This project is in *ALPHA* version. Changes will be made in the future.
 ## Outbound
 
 * Direct
+* Blackhole
+* Echo
 * HttpProxy
 * Socks5

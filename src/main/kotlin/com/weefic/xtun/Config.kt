@@ -18,6 +18,8 @@ sealed class TunnelInboundConfig(val port: Int) {
 
 sealed class TunnelOutboundConfig() {
     object Direct : TunnelOutboundConfig()
+    object Blackhole : TunnelOutboundConfig()
+    object Echo : TunnelOutboundConfig()
     data class Http(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
     data class Socks5(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
 }

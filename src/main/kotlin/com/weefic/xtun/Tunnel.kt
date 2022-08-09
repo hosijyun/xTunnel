@@ -52,7 +52,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
         }
     }
 
-    fun serverConnectionEstablished(serverConnection: ServerConnection) {
+    fun serverConnectionEstablished(serverConnection: AbstractConnection) {
         if (this.clientClosed) {
             serverConnection.close()
         } else {
