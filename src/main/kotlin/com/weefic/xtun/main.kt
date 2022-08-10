@@ -2,21 +2,17 @@ package com.weefic.xtun
 
 import ch.qos.logback.classic.util.ContextInitializer
 import io.netty.bootstrap.ServerBootstrap
-import io.netty.channel.Channel
 import io.netty.channel.ChannelOption
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.util.ResourceLeakDetector
 import org.slf4j.LoggerFactory
-import java.net.InetSocketAddress
 
-fun xtun(config: Config) {
+fun xtun(config: TunnelConfig) {
     val LOG = LoggerFactory.getLogger("Startup")
     val bossGroup = NioEventLoopGroup(1)
     val workerGroup = NioEventLoopGroup()
-
-
-
+    val route = TunnelRoute(config)
     try {
         LOG.info("Starting services...")
         val bootstrap = ServerBootstrap()
@@ -27,14 +23,14 @@ fun xtun(config: Config) {
             .option(ChannelOption.SO_REUSEADDR, true)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .childOption(ChannelOption.AUTO_READ, false)
-            .childHandler(ClientChannelInitializer(config))
-        val binds = config.tunnels.map { tunnelConfig ->
-            LOG.info("Binding {}", tunnelConfig.inbound.port)
-            bootstrap.bind("0.0.0.0", tunnelConfig.inbound.port).addListener {
+            .childHandler(ClientChannelInitializer(route))
+        val binds = config.inbound.values.map { inbound ->
+            LOG.info("Binding {}", inbound.port)
+            bootstrap.bind("0.0.0.0", inbound.port).addListener {
                 if (it.isSuccess) {
-                    LOG.info("Port {} binded", tunnelConfig.inbound.port)
+                    LOG.info("Port {} binded", inbound.port)
                 } else {
-                    LOG.warn("Failed to bind {}", tunnelConfig.inbound.port, it.cause())
+                    LOG.warn("Failed to bind {}", inbound.port, it.cause())
                 }
             }
         }
@@ -55,17 +51,17 @@ fun main() {
     System.setProperty(ContextInitializer.CONFIG_FILE_PROPERTY, "./logback.xml")
     ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID)
 
-    val route = object : DynamicRoute {
-        override fun route(channel: Channel): InetSocketAddress? {
-            return InetSocketAddress.createUnresolved("www.baidu.com", 80)
-        }
-    }
 
-    val config = Config(
-        listOf(
-            TunnelConfig(TunnelInboundConfig.Dynamic(8881, route), TunnelOutboundConfig.Echo),
-            TunnelConfig(TunnelInboundConfig.Http(8899), TunnelOutboundConfig.Http("127.0.0.1", 1087))
-        )
+    val config = TunnelConfig(
+        route = listOf(
+            TunnelRouteConfig("in1", "out1")
+        ),
+        inbound = mapOf(
+            "in1" to TunnelInboundConfig.Http(8899),
+        ),
+        outbound = mapOf(
+            "out1" to TunnelOutboundConfig.Http("127.0.0.1", 1087),
+        ),
     )
     xtun(config)
 }

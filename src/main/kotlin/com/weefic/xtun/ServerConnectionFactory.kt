@@ -12,15 +12,15 @@ object ServerConnectionFactory {
     fun connect(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, address: InetSocketAddress, completeHandler: (Boolean) -> Unit) {
         when (outboundConfig) {
             TunnelOutboundConfig.Direct -> {
-                this.connect(tunnel, eventLoop, outboundConfig, address, address, completeHandler)
+                this.connect0(tunnel, eventLoop, outboundConfig, address, address, completeHandler)
             }
             is TunnelOutboundConfig.Http -> {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
-                this.connect(tunnel, eventLoop, outboundConfig, serverAddress, address, completeHandler)
+                this.connect0(tunnel, eventLoop, outboundConfig, serverAddress, address, completeHandler)
             }
             is TunnelOutboundConfig.Socks5 -> {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
-                this.connect(tunnel, eventLoop, outboundConfig, serverAddress, address, completeHandler)
+                this.connect0(tunnel, eventLoop, outboundConfig, serverAddress, address, completeHandler)
             }
             TunnelOutboundConfig.Blackhole -> {
                 BlackholeConnection(tunnel, eventLoop)
@@ -31,7 +31,7 @@ object ServerConnectionFactory {
         }
     }
 
-    private fun connect(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, serverAddress: InetSocketAddress, targetAddress: InetSocketAddress, completeHandler: (Boolean) -> Unit) {
+    private fun connect0(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, serverAddress: InetSocketAddress, targetAddress: InetSocketAddress, completeHandler: (Boolean) -> Unit) {
         val serverConnectionBootstrap = Bootstrap()
         serverConnectionBootstrap
             .group(eventLoop)

@@ -1,7 +1,6 @@
 package com.weefic.xtun
 
 import com.weefic.xtun.handlers.InboundHttpRequestDecoder
-import com.weefic.xtun.inbound.ClientConnectionDynamicInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
 import io.netty.channel.ChannelInitializer
@@ -9,21 +8,22 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpRequestDecoder
 import org.slf4j.LoggerFactory
 
-class ClientChannelInitializer(val config: Config) : ChannelInitializer<SocketChannel>() {
+class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<SocketChannel>() {
     companion object {
         val LOG = LoggerFactory.getLogger("Client-Initializer")
     }
 
     override fun initChannel(clientChannel: SocketChannel) {
-        val port = clientChannel.localAddress().port
-        val tunnelConfig = this.config.tunnels.firstOrNull { it.inbound.port == port }
-        if (tunnelConfig == null) {
+        val clientAddress = clientChannel.remoteAddress().address.hostAddress
+        val tunnelPort = clientChannel.localAddress().port
+        val route = this.route.route(tunnelPort, clientAddress)
+        if (route == null) {
             clientChannel.close()
             return
         }
         val pipeline = clientChannel.pipeline()
-        val tunnel = Tunnel(tunnelConfig, clientChannel)
-        when (val inbound = tunnelConfig.inbound) {
+        val tunnel = Tunnel(route.second, clientChannel)
+        when (val inbound = route.first) {
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.credential))
@@ -32,10 +32,6 @@ class ClientChannelInitializer(val config: Config) : ChannelInitializer<SocketCh
             }
             is TunnelInboundConfig.Socks5 -> {
                 pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credential))
-                pipeline.addLast(tunnel.clientConnection)
-            }
-            is TunnelInboundConfig.Dynamic -> {
-                pipeline.addLast(ClientConnectionDynamicInboundHandler(tunnel.connectionId, inbound.router))
                 pipeline.addLast(tunnel.clientConnection)
             }
         }

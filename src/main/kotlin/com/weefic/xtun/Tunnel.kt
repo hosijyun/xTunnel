@@ -7,7 +7,7 @@ import org.slf4j.helpers.BasicMarkerFactory
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicLong
 
-class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
+class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChannel) {
     companion object {
         val MARKERS = BasicMarkerFactory()
         private val IDGenerator = AtomicLong(0)
@@ -38,7 +38,7 @@ class Tunnel(val config: TunnelConfig, clientChannel: SocketChannel) {
 
     fun connectServer(address: InetSocketAddress) {
         this.connectServerRequested = true
-        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.config.outbound, address) { isSuccess ->
+        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, address) { isSuccess ->
             if (!isSuccess) {
                 LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
                 this.serverClosed()
