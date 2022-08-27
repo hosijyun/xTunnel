@@ -38,12 +38,14 @@ class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChan
 
     fun connectServer(address: InetSocketAddress) {
         this.connectServerRequested = true
-        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, address) { isSuccess ->
-            if (!isSuccess) {
-                LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
-                this.serverClosed()
+        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, address, object : ServerConnectionCompletionListener {
+            override fun complete(isSuccess: Boolean) {
+                if (!isSuccess) {
+                    LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
+                    this@Tunnel.serverClosed()
+                }
             }
-        }
+        })
     }
 
     fun serverConnectionNegotiationFailed(why: ServerConnectionResult) {
