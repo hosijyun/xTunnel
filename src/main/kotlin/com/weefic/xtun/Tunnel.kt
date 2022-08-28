@@ -35,10 +35,11 @@ class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChan
             field = value
             this.clientConnection.peerWritableChanged()
         }
+    private val inboundLocalAddress = clientChannel.localAddress()
 
     fun connectServer(address: InetSocketAddress) {
         this.connectServerRequested = true
-        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, address, object : ServerConnectionCompletionListener {
+        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, this.inboundLocalAddress, address, object : ServerConnectionCompletionListener {
             override fun complete(isSuccess: Boolean) {
                 if (!isSuccess) {
                     LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
