@@ -42,7 +42,7 @@ class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChan
         ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, this.inboundLocalAddress, address, object : ServerConnectionCompletionListener {
             override fun complete(isSuccess: Boolean) {
                 if (!isSuccess) {
-                    LOG.info(LOG_PREFIX, "Failed to connection server : {}:{}", address.hostString, address.port)
+                    LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", address.hostString, address.port)
                     this@Tunnel.serverClosed()
                 }
             }

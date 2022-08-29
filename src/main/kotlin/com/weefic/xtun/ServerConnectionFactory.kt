@@ -6,6 +6,8 @@ import io.netty.bootstrap.Bootstrap
 import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoop
 import io.netty.channel.socket.nio.NioSocketChannel
+import org.slf4j.LoggerFactory
+import org.slf4j.event.LoggingEvent
 import java.net.InetSocketAddress
 
 interface ServerConnectionCompletionListener {
@@ -13,6 +15,7 @@ interface ServerConnectionCompletionListener {
 }
 
 object ServerConnectionFactory {
+    private val LOG = LoggerFactory.getLogger("Connections")
     fun connect(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, localAddress: InetSocketAddress, address: InetSocketAddress, completeHandler: ServerConnectionCompletionListener) {
         when (outboundConfig) {
             TunnelOutboundConfig.Direct -> {
@@ -46,7 +49,10 @@ object ServerConnectionFactory {
             .option(ChannelOption.SO_KEEPALIVE, true)
             .handler(ServerChannelInitializer(tunnel, outboundConfig, targetAddress))
         val usingLocalAddress = InetSocketAddress(localAddress.hostString, 0)
-        serverConnectionBootstrap.connect(serverAddress, usingLocalAddress).addListener {
+        serverConnectionBootstrap.connect(serverAddress, null).addListener {
+            if (!it.isSuccess) {
+                LOG.info("Connect {} failed", serverAddress, it.cause())
+            }
             completeHandler.complete(it.isSuccess)
         }
     }
