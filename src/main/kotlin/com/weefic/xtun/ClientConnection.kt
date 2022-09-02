@@ -29,7 +29,7 @@ class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : Cha
             }
             is ServerConnectionRequest -> {
                 LOG.info(LOG_PREFIX, "Connecting server")
-                this.tunnel.connectServer(msg.address)
+                this.tunnel.connectServer(msg.address, msg.user)
                 ReferenceCountUtil.release(msg)
             }
             else -> {

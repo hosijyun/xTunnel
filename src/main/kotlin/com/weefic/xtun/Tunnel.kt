@@ -7,7 +7,10 @@ import org.slf4j.helpers.BasicMarkerFactory
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicLong
 
-class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChannel) {
+class Tunnel(
+    private val clientChannel: SocketChannel,
+    private val route: TunnelRoute
+) {
     companion object {
         val MARKERS = BasicMarkerFactory()
         private val IDGenerator = AtomicLong(0)
@@ -17,7 +20,7 @@ class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChan
     val connectionId = IDGenerator.incrementAndGet()
     private val LOG_PREFIX = MARKERS.getDetachedMarker("-$connectionId")
 
-    val clientConnection = ClientConnection(this, clientChannel)
+    val clientConnection = ClientConnection(this, this.clientChannel)
     private var clientClosed = false
 
     private var connectServerRequested = false
@@ -35,18 +38,25 @@ class Tunnel(val outboundConfig: TunnelOutboundConfig, clientChannel: SocketChan
             field = value
             this.clientConnection.peerWritableChanged()
         }
-    private val inboundLocalAddress = clientChannel.localAddress()
 
-    fun connectServer(address: InetSocketAddress) {
+    fun connectServer(address: InetSocketAddress, user: String?) {
         this.connectServerRequested = true
-        ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, this.outboundConfig, this.inboundLocalAddress, address, object : ServerConnectionCompletionListener {
-            override fun complete(isSuccess: Boolean) {
-                if (!isSuccess) {
-                    LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", address.hostString, address.port)
-                    this@Tunnel.serverClosed()
+        val localAddress = this.clientChannel.localAddress()!!
+        val clientAddress = this.clientChannel.remoteAddress()!!
+        val outboundConfig = this.route.getOutboundConfig(localAddress, clientAddress, user)
+        if (outboundConfig != null) {
+            ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, address, object : ServerConnectionCompletionListener {
+                override fun complete(isSuccess: Boolean) {
+                    if (!isSuccess) {
+                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", address.hostString, address.port)
+                        this@Tunnel.serverClosed()
+                    }
                 }
-            }
-        })
+            })
+        } else {
+            LOG.info(LOG_PREFIX, "No outbound config for client address : {}:{}, user : {}", address.hostString, address.port, user)
+            this@Tunnel.serverClosed()
+        }
     }
 
     fun serverConnectionNegotiationFailed(why: ServerConnectionResult) {

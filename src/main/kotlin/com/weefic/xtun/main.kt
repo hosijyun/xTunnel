@@ -54,13 +54,21 @@ fun main() {
 
     val config = TunnelConfig(
         route = listOf(
-            TunnelRouteConfig("in1", "out1")
+            TunnelRouteConfig("in1", "out1", null, "u1"),
+            TunnelRouteConfig("in1", "out2", null, "u2")
         ),
         inbound = mapOf(
-            "in1" to TunnelInboundConfig.Http(8899),
+            "in1" to TunnelInboundConfig.Http(
+                port = 8899,
+                credentials = listOf(
+                    UserCredential("u1", "1"),
+                    UserCredential("u2", "1")
+                )
+            ),
         ),
         outbound = mapOf(
             "out1" to TunnelOutboundConfig.Http("127.0.0.1", 1087),
+            "out2" to TunnelOutboundConfig.Http("127.0.0.1", 1088),
         ),
     )
     xtun(config)

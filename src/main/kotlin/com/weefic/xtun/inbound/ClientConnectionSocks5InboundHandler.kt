@@ -2,8 +2,10 @@ package com.weefic.xtun.inbound
 
 import com.weefic.xtun.ServerConnectionRequest
 import com.weefic.xtun.ServerConnectionResult
+import com.weefic.xtun.Tunnel
 import com.weefic.xtun.UserCredential
 import io.netty.buffer.ByteBuf
+import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.ByteToMessageDecoder
@@ -14,12 +16,17 @@ import io.netty.handler.codec.socksx.v5.Socks5CommandStatus
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.CharsetUtil
 import io.netty.util.NetUtil
+import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 
 class ClientConnectionSocks5InboundHandler(
     connectionId: Long,
-    val userCredential: UserCredential?
+    val userCredentials: List<UserCredential>?
 ) : ByteToMessageDecoder() {
+    companion object {
+        private val LOG = LoggerFactory.getLogger("client-connection-socks5")
+    }
+
     private enum class Status {
         Initialize,
         WaitAuthentication,
@@ -28,41 +35,53 @@ class ClientConnectionSocks5InboundHandler(
         Closed,
     }
 
+    private val TAG = Tunnel.MARKERS.getDetachedMarker("-$connectionId")
     private var status = Status.Initialize
+    private var user: String? = null
+
+
+    private fun ChannelHandlerContext.writeData(data: ByteArray): ChannelFuture {
+        return this.writeAndFlush(this.alloc().buffer().writeBytes(data))
+    }
+
+    private fun handleHandshake(ctx: ChannelHandlerContext, version: SocksVersion, methods: ByteArray) {
+        val shouldStartCredentialChallenge = this.userCredentials != null
+        val acceptMethod = if (shouldStartCredentialChallenge) Socks5AuthMethod.PASSWORD else Socks5AuthMethod.NO_AUTH
+        if (version == SocksVersion.SOCKS5) {
+            if (methods.contains(acceptMethod.byteValue())) {
+                LOG.debug("Socks5 handshake accepted.")
+                ctx.writeData(byteArrayOf(SocksVersion.SOCKS5.byteValue(), acceptMethod.byteValue())).addListener(ChannelFutureListener.CLOSE)
+                if (shouldStartCredentialChallenge) {
+                    this.status = Status.WaitAuthentication
+                } else {
+                    this.status = Status.WaitServerInfo
+                }
+            } else {
+                ctx.writeData(byteArrayOf(SocksVersion.SOCKS5.byteValue(), Socks5AuthMethod.UNACCEPTED.byteValue())).addListener(ChannelFutureListener.CLOSE)
+                this.status = Status.Closed
+            }
+        } else {
+            this.status = Status.Closed
+            ctx.close()
+        }
+    }
 
     override fun decode(ctx: ChannelHandlerContext, msg: ByteBuf, out: MutableList<Any>) {
         if (this.status == Status.Initialize) {
             if (msg.readableBytes() > 2) {
                 val readerIndex = msg.readerIndex()
-
                 val version = SocksVersion.valueOf(msg.readByte())
                 val countOfMethods = msg.readByte().toInt() and 0xFF
                 if (msg.readableBytes() >= countOfMethods) {
                     val methods = ByteArray(countOfMethods)
                     msg.readBytes(methods)
-
-                    val acceptMethod = if (this.userCredential == null) Socks5AuthMethod.NO_AUTH else Socks5AuthMethod.PASSWORD
-                    if (version == SocksVersion.SOCKS5) {
-                        if (methods.contains(acceptMethod.byteValue())) {
-                            ctx.writeAndFlush(ctx.alloc().buffer().writeBytes(byteArrayOf(SocksVersion.SOCKS5.byteValue(), acceptMethod.byteValue())))
-                            this.status = if (this.userCredential == null) Status.WaitServerInfo else Status.WaitAuthentication
-                        } else {
-                            ctx.writeAndFlush(ctx.alloc().buffer().writeBytes(byteArrayOf(SocksVersion.SOCKS5.byteValue(), Socks5AuthMethod.UNACCEPTED.byteValue()))).addListener(ChannelFutureListener.CLOSE)
-                            msg.readerIndex(msg.writerIndex())
-                            this.status = Status.Closed
-                        }
-                    } else {
-                        msg.readerIndex(msg.writerIndex())
-                        this.status = Status.Closed
-                        ctx.close()
-                    }
+                    this.handleHandshake(ctx, version, methods)
                 } else {
                     msg.readerIndex(readerIndex)
                 }
             }
         } else if (this.status == Status.WaitAuthentication) {
             if (msg.readableBytes() > 2) {
-                val credential = this.userCredential!!
                 val readerIndex = msg.readerIndex()
 
                 val version = SocksVersion.valueOf(msg.readByte())
@@ -74,7 +93,8 @@ class ClientConnectionSocks5InboundHandler(
                     if (msg.readableBytes() >= pLength) {
                         val password = ByteArray(pLength)
                         msg.readBytes(password)
-                        if (credential.user.encodeToByteArray().contentEquals(user) && credential.password.encodeToByteArray().contentEquals(password)) {
+                        val acceptedUser = this.accept(user, password)
+                        if (acceptedUser != null) {
                             ctx.writeAndFlush(
                                 ctx.alloc().buffer().writeBytes(
                                     byteArrayOf(
@@ -84,6 +104,7 @@ class ClientConnectionSocks5InboundHandler(
                                 )
                             )
                             this.status = Status.WaitServerInfo
+                            this.user = acceptedUser
                         } else {
                             msg.readerIndex(msg.writerIndex())
                             ctx.writeAndFlush(
@@ -151,7 +172,7 @@ class ClientConnectionSocks5InboundHandler(
                 }
                 val port = msg.readUnsignedShort()
                 if (version == SocksVersion.SOCKS5 && command == Socks5CommandType.CONNECT) {
-                    ctx.fireChannelRead(ServerConnectionRequest(InetSocketAddress.createUnresolved(host, port)))
+                    ctx.fireChannelRead(ServerConnectionRequest(InetSocketAddress.createUnresolved(host, port), this.user))
                     this.status = Status.WaitConnection
                 } else {
                     msg.readerIndex(msg.writerIndex())
@@ -160,6 +181,18 @@ class ClientConnectionSocks5InboundHandler(
                 }
             }
         }
+    }
+
+    private fun accept(user: ByteArray, password: ByteArray): String? {
+        val credentials = this.userCredentials
+        if (credentials != null) {
+            for (credential in credentials) {
+                if (credential.user.encodeToByteArray().contentEquals(user) && credential.password.encodeToByteArray().contentEquals(password)) {
+                    return credential.user
+                }
+            }
+        }
+        return null
     }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {

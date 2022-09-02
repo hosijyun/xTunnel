@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.util.*
 
-class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredential: UserCredential?) : ChannelInboundHandlerAdapter() {
+class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredentials: List<UserCredential>?) : ChannelInboundHandlerAdapter() {
     companion object {
         const val HTTP_DECODER_NAME = "HTTP_DECODER"
         const val HTTP_ENCODER_NAME = "HTTP_ENCODER"
@@ -29,7 +29,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
         object Undetermined : TransferMode()
         object Terminated : TransferMode()
         object HttpMessaging : TransferMode()
-        data class ConnectNegotiating(val address: InetSocketAddress) : TransferMode()
+        data class ConnectNegotiating(val address: InetSocketAddress, val user: String?) : TransferMode()
         object ConnectStreaming : TransferMode()
     }
 
@@ -37,21 +37,29 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
     private var serverConnectedVarConnect = false
 
 
-    private fun accept(authorization: String?): Boolean {
-        val credential = this.userCredential ?: return true
-        if (authorization != null) {
-            val authBase64 = authorization.substringAfter("Basic ")
-            val authBytes = try {
-                Base64.getDecoder().decode(authBase64)
-            } catch (e: Exception) {
-                null
+    private fun accept(authorization: String?): Pair<String?, Boolean> {
+        val credentials = this.userCredentials
+        if (credentials == null) {
+            return null to true
+        } else {
+            if (authorization != null) {
+                val authBase64 = authorization.substringAfter("Basic ")
+                val authBytes = try {
+                    Base64.getDecoder().decode(authBase64)
+                } catch (e: Exception) {
+                    null
+                }
+                if (authBytes != null) {
+                    for (credential in credentials) {
+                        val checkBytes = "${credential.user}:${credential.password}".encodeToByteArray()
+                        if (authBytes.contentEquals(checkBytes)) {
+                            return credential.user to true
+                        }
+                    }
+                }
             }
-            if (authBytes != null) {
-                val checkBytes = "${credential.user}:${credential.password}".encodeToByteArray()
-                return authBytes.contentEquals(checkBytes)
-            }
+            return null to false
         }
-        return false
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, obj: Any) {
@@ -60,7 +68,8 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                 if (obj is HttpRequest) {
                     val headers = obj.headers()
                     // 收到HTTP请求
-                    if (this.accept(headers.get(HttpHeaderNames.PROXY_AUTHORIZATION))) {
+                    val (user, accepted) = this.accept(headers.get(HttpHeaderNames.PROXY_AUTHORIZATION))
+                    if (accepted) {
                         headers.set(HttpHeaderNames.CONNECTION, "Close")
                         headers.remove(HttpHeaderNames.PROXY_CONNECTION)
                         headers.remove(HttpHeaderNames.PROXY_AUTHORIZATION)
@@ -70,13 +79,13 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                         if (obj.method() == HttpMethod.CONNECT) {
                             // 使用CONNECT模式
                             LOG.info(LOG_PREFIX, "Connection is negotiating.")
-                            this.transferMode = TransferMode.ConnectNegotiating(address)
+                            this.transferMode = TransferMode.ConnectNegotiating(address, user)
                             ReferenceCountUtil.release(obj)
                         } else {
                             // 使用非CONNECT模式
                             LOG.info(LOG_PREFIX, "Ready for connect destination server using HTTP-Message mode")
                             this.transferMode = TransferMode.HttpMessaging
-                            ctx.fireChannelRead(ServerConnectionRequest(address))
+                            ctx.fireChannelRead(ServerConnectionRequest(address, user))
                             ctx.fireChannelRead(obj)
                         }
                     } else {
@@ -96,7 +105,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                     is LastHttpContent -> {
                         LOG.info(LOG_PREFIX, "Negotiation finished. Ready for connect destination server.")
                         this.transferMode = TransferMode.ConnectStreaming
-                        ctx.fireChannelRead(ServerConnectionRequest(transferMode.address))
+                        ctx.fireChannelRead(ServerConnectionRequest(transferMode.address, transferMode.user))
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
                         ReferenceCountUtil.release(obj)
                     }

@@ -5,8 +5,8 @@ data class UserCredential(val user: String, val password: String)
 
 
 sealed class TunnelInboundConfig(val port: Int) {
-    class Http(port: Int, val credential: UserCredential? = null) : TunnelInboundConfig(port)
-    class Socks5(port: Int, val credential: UserCredential? = null) : TunnelInboundConfig(port)
+    class Http(port: Int, val credentials: List<UserCredential>? = null) : TunnelInboundConfig(port)
+    class Socks5(port: Int, val credentials: List<UserCredential>? = null) : TunnelInboundConfig(port)
 }
 
 sealed class TunnelOutboundConfig() {
@@ -21,6 +21,7 @@ class TunnelRouteConfig(
     val inbound: String,
     val outbound: String,
     val clientAddress: String? = null,
+    val user: String? = null,
 )
 
 class TunnelConfig(

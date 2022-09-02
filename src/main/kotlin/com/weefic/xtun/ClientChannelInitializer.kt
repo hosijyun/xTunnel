@@ -16,22 +16,22 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
     override fun initChannel(clientChannel: SocketChannel) {
         val clientAddress = clientChannel.remoteAddress().address.hostAddress
         val tunnelPort = clientChannel.localAddress().port
-        val route = this.route.route(tunnelPort, clientAddress)
-        if (route == null) {
+        val inbound = this.route.getInboundConfig(tunnelPort)
+        if (inbound == null) {
             clientChannel.close()
             return
         }
         val pipeline = clientChannel.pipeline()
-        val tunnel = Tunnel(route.second, clientChannel)
-        when (val inbound = route.first) {
+        val tunnel = Tunnel(clientChannel, this.route)
+        when (inbound) {
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
-                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.credential))
+                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.credentials))
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_ENCODER_NAME, InboundHttpRequestDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
             is TunnelInboundConfig.Socks5 -> {
-                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credential))
+                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credentials))
                 pipeline.addLast(tunnel.clientConnection)
             }
         }
