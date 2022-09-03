@@ -5,6 +5,8 @@ import com.weefic.xtun.handlers.PureHttpRequestEncoder
 import com.weefic.xtun.outbound.ServerConnectionDirectInboundHandler
 import com.weefic.xtun.outbound.ServerConnectionHttpProxyInboundHandler
 import com.weefic.xtun.outbound.ServerConnectionSocks5InboundHandler
+import com.weefic.xtun.shadowsocks.ShadowSocksHostEncoder
+import com.weefic.xtun.shadowsocks.config
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 import java.net.InetSocketAddress
@@ -32,8 +34,14 @@ class ServerChannelInitializer(
                 pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
                 pipeline.addLast(serverConnection)
             }
+            is TunnelOutboundConfig.Shadowsocks -> {
+                this.outboundConfig.encryptionMethod.config(pipeline, this.outboundConfig.password)
+                pipeline.addLast(ShadowSocksHostEncoder(this.targetAddress.hostString, this.targetAddress.port))
+                pipeline.addLast(serverConnection)
+            }
             TunnelOutboundConfig.Blackhole -> throw UnsupportedOperationException("Blackhole unsupported")
             TunnelOutboundConfig.Echo -> throw UnsupportedOperationException("Echo unsupported")
+
         }
     }
 }

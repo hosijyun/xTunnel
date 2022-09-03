@@ -7,7 +7,6 @@ import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoop
 import io.netty.channel.socket.nio.NioSocketChannel
 import org.slf4j.LoggerFactory
-import org.slf4j.event.LoggingEvent
 import java.net.InetSocketAddress
 
 interface ServerConnectionCompletionListener {
@@ -29,6 +28,10 @@ object ServerConnectionFactory {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
+            is TunnelOutboundConfig.Shadowsocks -> {
+                val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
+                this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
+            }
             TunnelOutboundConfig.Blackhole -> {
                 BlackholeConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
@@ -37,6 +40,7 @@ object ServerConnectionFactory {
                 EchoConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
+
         }
     }
 

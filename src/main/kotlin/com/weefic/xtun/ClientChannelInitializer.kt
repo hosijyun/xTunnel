@@ -3,6 +3,8 @@ package com.weefic.xtun
 import com.weefic.xtun.handlers.InboundHttpRequestDecoder
 import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
+import com.weefic.xtun.shadowsocks.ShadowSocksHostDecoder
+import com.weefic.xtun.shadowsocks.config
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpRequestDecoder
@@ -32,6 +34,11 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
             }
             is TunnelInboundConfig.Socks5 -> {
                 pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credentials))
+                pipeline.addLast(tunnel.clientConnection)
+            }
+            is TunnelInboundConfig.Shadowsocks -> {
+                inbound.encryptionMethod.config(pipeline, inbound.password)
+                pipeline.addLast(ShadowSocksHostDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
         }

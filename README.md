@@ -8,6 +8,7 @@ This project is in *ALPHA* version. Changes will be made in the future.
 
 * HttpProxy
 * Socks5
+* Shadowsocks
 
 ## Outbound
 
@@ -16,3 +17,4 @@ This project is in *ALPHA* version. Changes will be made in the future.
 * Echo
 * HttpProxy
 * Socks5
+* Shadowsocks
