@@ -28,16 +28,16 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
         when (inbound) {
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
-                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.credentials))
+                pipeline.addLast(ClientConnectionHttpProxyInboundHandler(tunnel.connectionId, inbound.users))
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_ENCODER_NAME, InboundHttpRequestDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
             is TunnelInboundConfig.Socks5 -> {
-                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.credentials))
+                pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.users))
                 pipeline.addLast(tunnel.clientConnection)
             }
             is TunnelInboundConfig.Shadowsocks -> {
-                inbound.encryptionMethod.config(pipeline, inbound.password)
+                inbound.method.config(pipeline, inbound.password)
                 pipeline.addLast(ShadowSocksHostDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }

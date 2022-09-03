@@ -1,53 +1,153 @@
 package com.weefic.xtun
 
+import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 
-data class UserCredential(val user: String, val password: String)
+
+data class UserCredential(
+    @JsonProperty(required = true) val user: String,
+    @JsonProperty(required = true) val password: String
+)
 
 enum class ShadowsocksEncryptionMethod {
+    @JsonProperty("aes-128-gcm")
     AES128GCM,
+
+    @JsonProperty("aes-192-gcm")
     AES192GCM,
+
+    @JsonProperty("aes-256-gcm")
     AES256GCM,
+
+    @JsonProperty("aes-128-cfb")
     AES128CFB,
+
+    @JsonProperty("aes-192-cfb")
     AES192CFB,
+
+    @JsonProperty("aes-256-cfb")
     AES256CFB,
+
+    @JsonProperty("aes-128-ctr")
     AES128CTR,
+
+    @JsonProperty("aes-192-ctr")
     AES192CTR,
+
+    @JsonProperty("aes-256-ctr")
     AES256CTR,
+
+    @JsonProperty("camellia-128-cfb")
     Camellia128CFB,
+
+    @JsonProperty("camellia-192-cfb")
     Camellia192CFB,
+
+    @JsonProperty("camellia-256-cfb")
     Camellia256CFB,
+
+    @JsonProperty("chacha20-ietf-poly1305")
     Chacha20IETFPoly1305,
 
     // XChacha20IETFPoly1305,
+
+    @JsonProperty("salsa20")
     Salsa20,
+
+    @JsonProperty("chacha20")
     Chacha20,
+
+    @JsonProperty("chacha20-ietf")
     Chacha20IETF,
 }
 
-sealed class TunnelInboundConfig(val port: Int) {
-    class Http(port: Int, val credentials: List<UserCredential>? = null) : TunnelInboundConfig(port)
-    class Socks5(port: Int, val credentials: List<UserCredential>? = null) : TunnelInboundConfig(port)
-    class Shadowsocks(port: Int, val encryptionMethod: ShadowsocksEncryptionMethod, val password: String) : TunnelInboundConfig(port)
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
+@JsonSubTypes(
+    JsonSubTypes.Type(name = "http", value = TunnelInboundConfig.Http::class),
+    JsonSubTypes.Type(name = "socks5", value = TunnelInboundConfig.Socks5::class),
+    JsonSubTypes.Type(name = "shadowsocks", value = TunnelInboundConfig.Shadowsocks::class),
+)
+sealed class TunnelInboundConfig {
+    abstract val id: String
+    abstract val port: Int
+
+    data class Http(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) override val port: Int,
+        val users: List<UserCredential>? = null,
+    ) : TunnelInboundConfig()
+
+    data class Socks5(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) override val port: Int,
+        val users: List<UserCredential>? = null,
+    ) : TunnelInboundConfig()
+
+    data class Shadowsocks(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = true) val method: ShadowsocksEncryptionMethod,
+        @JsonProperty(required = true) val password: String,
+    ) : TunnelInboundConfig()
 }
 
-sealed class TunnelOutboundConfig() {
-    object Direct : TunnelOutboundConfig()
-    object Blackhole : TunnelOutboundConfig()
-    object Echo : TunnelOutboundConfig()
-    class Http(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
-    class Socks5(val host: String, val port: Int, val credential: UserCredential? = null) : TunnelOutboundConfig()
-    class Shadowsocks(val host: String, val port: Int, val encryptionMethod: ShadowsocksEncryptionMethod, val password: String) : TunnelOutboundConfig()
+@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
+@JsonSubTypes(
+    JsonSubTypes.Type(name = "direct", value = TunnelOutboundConfig.Direct::class),
+    JsonSubTypes.Type(name = "blackhole", value = TunnelOutboundConfig.Blackhole::class),
+    JsonSubTypes.Type(name = "echo", value = TunnelOutboundConfig.Echo::class),
+    JsonSubTypes.Type(name = "http", value = TunnelOutboundConfig.Http::class),
+    JsonSubTypes.Type(name = "socks5", value = TunnelOutboundConfig.Socks5::class),
+    JsonSubTypes.Type(name = "shadowsocks", value = TunnelOutboundConfig.Shadowsocks::class),
+)
+sealed class TunnelOutboundConfig {
+    abstract val id: String
+
+    data class Direct(
+        @JsonProperty(required = true) override val id: String,
+    ) : TunnelOutboundConfig()
+
+    data class Blackhole(
+        @JsonProperty(required = true) override val id: String,
+    ) : TunnelOutboundConfig()
+
+    data class Echo(
+        @JsonProperty(required = true) override val id: String,
+    ) : TunnelOutboundConfig()
+
+    data class Http(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) val host: String,
+        @JsonProperty(required = true) val port: Int,
+        val user: UserCredential? = null
+    ) : TunnelOutboundConfig()
+
+    data class Socks5(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) val host: String,
+        @JsonProperty(required = true) val port: Int,
+        @JsonProperty(required = true) val user: UserCredential? = null
+    ) : TunnelOutboundConfig()
+
+    data class Shadowsocks(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) val host: String,
+        @JsonProperty(required = true) val port: Int,
+        @JsonProperty(required = true) val method: ShadowsocksEncryptionMethod,
+        @JsonProperty(required = true) val password: String
+    ) : TunnelOutboundConfig()
 }
 
-class TunnelRouteConfig(
-    val inbound: String,
-    val outbound: String,
-    val clientAddress: String? = null,
+data class TunnelRouteConfig(
+    @JsonProperty(required = true, value = "in") val inbound: String,
+    @JsonProperty(required = true, value = "out") val outbound: String,
+    @JsonProperty(value = "client_address") val clientAddress: String? = null,
     val user: String? = null,
 )
 
 class TunnelConfig(
-    val route: List<TunnelRouteConfig>,
-    val inbound: Map<String, TunnelInboundConfig>,
-    val outbound: Map<String, TunnelOutboundConfig>,
+    @JsonProperty(required = true) val route: List<TunnelRouteConfig>,
+    @JsonProperty(required = true, value = "in") val inbound: List<TunnelInboundConfig>,
+    @JsonProperty(required = true, value = "out") val outbound: List<TunnelOutboundConfig>,
 )

@@ -26,21 +26,21 @@ class ServerChannelInitializer(
             }
             is TunnelOutboundConfig.Http -> {
                 pipeline.addLast(ServerConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, ConnectRequestHttpResponseDecoder())
-                pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
+                pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.user))
                 pipeline.addLast(serverConnection)
                 pipeline.addLast(PureHttpRequestEncoder()) // Write CONNECT Request
             }
             is TunnelOutboundConfig.Socks5 -> {
-                pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.credential))
+                pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.user))
                 pipeline.addLast(serverConnection)
             }
             is TunnelOutboundConfig.Shadowsocks -> {
-                this.outboundConfig.encryptionMethod.config(pipeline, this.outboundConfig.password)
+                this.outboundConfig.method.config(pipeline, this.outboundConfig.password)
                 pipeline.addLast(ShadowSocksHostEncoder(this.targetAddress.hostString, this.targetAddress.port))
                 pipeline.addLast(serverConnection)
             }
-            TunnelOutboundConfig.Blackhole -> throw UnsupportedOperationException("Blackhole unsupported")
-            TunnelOutboundConfig.Echo -> throw UnsupportedOperationException("Echo unsupported")
+            is TunnelOutboundConfig.Blackhole -> throw UnsupportedOperationException("Blackhole unsupported")
+            is TunnelOutboundConfig.Echo -> throw UnsupportedOperationException("Echo unsupported")
 
         }
     }

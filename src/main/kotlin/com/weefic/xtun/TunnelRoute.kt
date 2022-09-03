@@ -3,10 +3,12 @@ package com.weefic.xtun
 import java.net.InetSocketAddress
 
 class TunnelRoute(private val config: TunnelConfig) {
-    private val portToInboundName = this.config.inbound.map { entry ->
-        entry.value.port to entry.key
-    }.toMap()
-    private val outboundMapping = this.config.route.map { route ->
+    private val portToInboundName = this.config.inbound.associate { config ->
+        config.port to config.id
+    }
+    private val inboundNameToConfig = this.config.inbound.associateBy { it.id }
+    private val outboundNameToConfig = this.config.outbound.associateBy { it.id }
+    private val outboundMapping = this.config.route.associate { route ->
         val clientAddress = route.clientAddress
         val user = route.user
         val key = if (clientAddress != null && user != null) {
@@ -19,11 +21,11 @@ class TunnelRoute(private val config: TunnelConfig) {
             "${route.inbound}-*"
         }
         key to route.outbound
-    }.toMap()
+    }
 
     fun getInboundConfig(port: Int): TunnelInboundConfig? {
         val inboundName = this.portToInboundName[port] ?: return null
-        return this.config.inbound[inboundName]
+        return this.inboundNameToConfig[inboundName]
     }
 
     fun getOutboundConfig(localAddress: InetSocketAddress, clientAddress: InetSocketAddress, user: String?): TunnelOutboundConfig? {
@@ -38,7 +40,7 @@ class TunnelRoute(private val config: TunnelConfig) {
             outboundName = this.outboundMapping["$inboundName-$clientAddress"] ?: this.outboundMapping["$inboundName-*"]
         }
         if (outboundName != null) {
-            return this.config.outbound[outboundName]
+            return this.outboundNameToConfig[outboundName]
         }
         return null
     }

@@ -24,7 +24,7 @@ fun xtun(config: TunnelConfig) {
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .childOption(ChannelOption.AUTO_READ, false)
             .childHandler(ClientChannelInitializer(route))
-        val binds = config.inbound.values.map { inbound ->
+        val binds = config.inbound.map { inbound ->
             LOG.info("Binding {}", inbound.port)
             bootstrap.bind("0.0.0.0", inbound.port).addListener {
                 if (it.isSuccess) {
@@ -50,17 +50,15 @@ fun xtun(config: TunnelConfig) {
 fun main() {
     System.setProperty(ContextInitializer.CONFIG_FILE_PROPERTY, "./logback.xml")
     ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.PARANOID)
-
-
     val config = TunnelConfig(
         route = listOf(
             TunnelRouteConfig("in1", "out1"),
         ),
-        inbound = mapOf(
-            "in1" to TunnelInboundConfig.Http(8899)
+        inbound = listOf(
+            TunnelInboundConfig.Socks5("in1", 8899)
         ),
-        outbound = mapOf(
-            "out1" to TunnelOutboundConfig.Direct,
+        outbound = listOf(
+            TunnelOutboundConfig.Direct("out1"),
         ),
     )
     xtun(config)

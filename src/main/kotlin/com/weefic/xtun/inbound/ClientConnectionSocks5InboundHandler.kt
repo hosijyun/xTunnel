@@ -50,7 +50,7 @@ class ClientConnectionSocks5InboundHandler(
         if (version == SocksVersion.SOCKS5) {
             if (methods.contains(acceptMethod.byteValue())) {
                 LOG.debug("Socks5 handshake accepted.")
-                ctx.writeData(byteArrayOf(SocksVersion.SOCKS5.byteValue(), acceptMethod.byteValue())).addListener(ChannelFutureListener.CLOSE)
+                ctx.writeData(byteArrayOf(SocksVersion.SOCKS5.byteValue(), acceptMethod.byteValue())).addListener(ChannelFutureListener.CLOSE_ON_FAILURE)
                 if (shouldStartCredentialChallenge) {
                     this.status = Status.WaitAuthentication
                 } else {

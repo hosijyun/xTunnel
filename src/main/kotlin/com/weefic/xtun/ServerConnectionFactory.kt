@@ -17,7 +17,7 @@ object ServerConnectionFactory {
     private val LOG = LoggerFactory.getLogger("Connections")
     fun connect(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, localAddress: InetSocketAddress, address: InetSocketAddress, completeHandler: ServerConnectionCompletionListener) {
         when (outboundConfig) {
-            TunnelOutboundConfig.Direct -> {
+            is TunnelOutboundConfig.Direct -> {
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, address, address, completeHandler)
             }
             is TunnelOutboundConfig.Http -> {
@@ -32,11 +32,11 @@ object ServerConnectionFactory {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
-            TunnelOutboundConfig.Blackhole -> {
+            is TunnelOutboundConfig.Blackhole -> {
                 BlackholeConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
-            TunnelOutboundConfig.Echo -> {
+            is TunnelOutboundConfig.Echo -> {
                 EchoConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
