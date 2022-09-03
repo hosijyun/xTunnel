@@ -139,11 +139,17 @@ sealed class TunnelOutboundConfig {
     ) : TunnelOutboundConfig()
 }
 
+data class TunnelRouteMatchConfig(
+    val user: String? = null,
+    @JsonProperty(value = "client_address") val clientAddresses: List<String>? = null,
+    @JsonProperty(value = "server_address") val serverAddresses: List<String>? = null,
+    val pac: String? = null,
+)
+
 data class TunnelRouteConfig(
     @JsonProperty(required = true, value = "in") val inbound: String,
     @JsonProperty(required = true, value = "out") val outbound: String,
-    @JsonProperty(value = "client_address") val clientAddress: String? = null,
-    val user: String? = null,
+    @JsonProperty(required = false, value = "match") val match: TunnelRouteMatchConfig? = null,
 )
 
 class TunnelConfig(

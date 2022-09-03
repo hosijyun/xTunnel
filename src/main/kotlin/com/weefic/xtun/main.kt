@@ -8,11 +8,11 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.util.ResourceLeakDetector
 import org.slf4j.LoggerFactory
 
-fun xtun(config: TunnelConfig) {
+fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null) {
     val LOG = LoggerFactory.getLogger("Startup")
     val bossGroup = NioEventLoopGroup(1)
     val workerGroup = NioEventLoopGroup()
-    val route = TunnelRoute(config)
+    val route = TunnelRoute(config, pac)
     try {
         LOG.info("Starting services...")
         val bootstrap = ServerBootstrap()

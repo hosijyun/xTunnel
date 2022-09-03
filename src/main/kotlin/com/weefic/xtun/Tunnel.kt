@@ -5,6 +5,7 @@ import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.helpers.BasicMarkerFactory
 import java.net.InetSocketAddress
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
 class Tunnel(
@@ -15,6 +16,7 @@ class Tunnel(
         val MARKERS = BasicMarkerFactory()
         private val IDGenerator = AtomicLong(0)
         private val LOG = LoggerFactory.getLogger("Tunnel")
+        private val OutboundRoutingThreads = Executors.newCachedThreadPool()
     }
 
     val connectionId = IDGenerator.incrementAndGet()
@@ -39,23 +41,44 @@ class Tunnel(
             this.clientConnection.peerWritableChanged()
         }
 
-    fun connectServer(address: InetSocketAddress, user: String?) {
-        this.connectServerRequested = true
-        val localAddress = this.clientChannel.localAddress()!!
-        val clientAddress = this.clientChannel.remoteAddress()!!
-        val outboundConfig = this.route.getOutboundConfig(localAddress, clientAddress, user)
+    private fun connectServer0(outboundConfig: TunnelOutboundConfig?, localAddress: InetSocketAddress, targetAddress: InetSocketAddress, user: String?) {
         if (outboundConfig != null) {
-            ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, address, object : ServerConnectionCompletionListener {
+            ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, targetAddress, object : ServerConnectionCompletionListener {
                 override fun complete(isSuccess: Boolean) {
                     if (!isSuccess) {
-                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", address.hostString, address.port)
+                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", targetAddress.hostString, targetAddress.port)
                         this@Tunnel.serverClosed()
                     }
                 }
             })
         } else {
-            LOG.info(LOG_PREFIX, "No outbound config for client address : {}:{}, user : {}", address.hostString, address.port, user)
+            LOG.info(LOG_PREFIX, "No outbound config for client address : {}:{}, user : {}", targetAddress.hostString, targetAddress.port, user)
             this@Tunnel.serverClosed()
+        }
+    }
+
+    fun connectServer(targetAddress: InetSocketAddress, user: String?) {
+        this.connectServerRequested = true
+        val localAddress = this.clientChannel.localAddress()!!
+        val clientAddress = this.clientChannel.remoteAddress()!!
+        val useEventLoop = this.route.pac != null
+        if (useEventLoop) {
+            val eventLoop = this@Tunnel.clientChannel.eventLoop()
+            OutboundRoutingThreads.run {
+                val outboundConfig = try {
+                    // This may take some time.(For PAC)
+                    this@Tunnel.route.getOutboundConfig(localAddress, clientAddress, targetAddress, user)
+                } catch (e: Exception) {
+                    LOG.warn("Failed to get outbound config.", e)
+                    null
+                }
+                eventLoop.execute {
+                    this@Tunnel.connectServer0(outboundConfig, localAddress, targetAddress, user)
+                }
+            }
+        } else {
+            val outboundConfig = this@Tunnel.route.getOutboundConfig(localAddress, clientAddress, targetAddress, user)
+            this.connectServer0(outboundConfig, localAddress, targetAddress, user)
         }
     }
 
