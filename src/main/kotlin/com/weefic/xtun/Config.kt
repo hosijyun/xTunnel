@@ -71,16 +71,20 @@ enum class ShadowsocksEncryptionMethod {
 sealed class TunnelInboundConfig {
     abstract val id: String
     abstract val port: Int
+    abstract val host: String?
+
 
     data class Http(
         @JsonProperty(required = true) override val id: String,
         @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = false) override val host: String? = null,
         val users: List<UserCredential>? = null,
     ) : TunnelInboundConfig()
 
     data class Socks5(
         @JsonProperty(required = true) override val id: String,
         @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = false) override val host: String? = null,
         val users: List<UserCredential>? = null,
     ) : TunnelInboundConfig()
 
@@ -89,6 +93,7 @@ sealed class TunnelInboundConfig {
         @JsonProperty(required = true) override val port: Int,
         @JsonProperty(required = true) val method: ShadowsocksEncryptionMethod,
         @JsonProperty(required = true) val password: String,
+        @JsonProperty(required = false) override val host: String? = null,
     ) : TunnelInboundConfig()
 }
 

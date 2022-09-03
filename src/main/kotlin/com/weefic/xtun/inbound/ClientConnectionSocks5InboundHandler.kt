@@ -18,6 +18,7 @@ import io.netty.util.CharsetUtil
 import io.netty.util.NetUtil
 import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
+import java.util.*
 
 class ClientConnectionSocks5InboundHandler(
     connectionId: Long,
@@ -84,7 +85,7 @@ class ClientConnectionSocks5InboundHandler(
             if (msg.readableBytes() > 2) {
                 val readerIndex = msg.readerIndex()
 
-                val version = SocksVersion.valueOf(msg.readByte())
+                val version = msg.readByte()
                 val uLength = msg.readByte().toInt() and 0xFF
                 if (msg.readableBytes() > uLength) {
                     val user = ByteArray(uLength)
@@ -98,7 +99,7 @@ class ClientConnectionSocks5InboundHandler(
                             ctx.writeAndFlush(
                                 ctx.alloc().buffer().writeBytes(
                                     byteArrayOf(
-                                        SocksVersion.SOCKS5.byteValue(),
+                                        0x01,
                                         Socks5CommandStatus.SUCCESS.byteValue()
                                     )
                                 )
@@ -110,7 +111,7 @@ class ClientConnectionSocks5InboundHandler(
                             ctx.writeAndFlush(
                                 ctx.alloc().buffer().writeBytes(
                                     byteArrayOf(
-                                        SocksVersion.SOCKS5.byteValue(),
+                                        0x01,
                                         Socks5CommandStatus.FAILURE.byteValue()
                                     )
                                 )

@@ -25,8 +25,9 @@ fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null) {
             .childOption(ChannelOption.AUTO_READ, false)
             .childHandler(ClientChannelInitializer(route))
         val binds = config.inbound.map { inbound ->
-            LOG.info("Binding {}", inbound.port)
-            bootstrap.bind("0.0.0.0", inbound.port).addListener {
+            val bindingHost = inbound.host ?: "0.0.0.0"
+            LOG.info("Binding {}:{}", bindingHost, inbound.port)
+            bootstrap.bind(bindingHost, inbound.port).addListener {
                 if (it.isSuccess) {
                     LOG.info("Port {} binded", inbound.port)
                 } else {
@@ -55,10 +56,14 @@ fun main() {
             TunnelRouteConfig("in1", "out1"),
         ),
         inbound = listOf(
-            TunnelInboundConfig.Socks5("in1", 8899)
+            TunnelInboundConfig.Socks5(
+                "in1", 8899, users = listOf(
+                    UserCredential("zy", "zysoft.COM")
+                )
+            )
         ),
         outbound = listOf(
-            TunnelOutboundConfig.Direct("out1"),
+            TunnelOutboundConfig.Http("out1", "127.0.0.1", 1087)
         ),
     )
     xtun(config)
