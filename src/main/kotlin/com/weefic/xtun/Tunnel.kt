@@ -43,11 +43,15 @@ class Tunnel(
 
     private fun connectServer0(outboundConfig: TunnelOutboundConfig?, localAddress: InetSocketAddress, targetAddress: InetSocketAddress, user: String?) {
         if (outboundConfig != null) {
+            val startAt = System.currentTimeMillis()
             ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, targetAddress, object : ServerConnectionCompletionListener {
                 override fun complete(isSuccess: Boolean) {
+                    val duration = System.currentTimeMillis() - startAt
                     if (!isSuccess) {
-                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}", targetAddress.hostString, targetAddress.port)
+                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
                         this@Tunnel.serverClosed()
+                    } else {
+                        LOG.info(LOG_PREFIX, "Connect {}:{} successfully. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
                     }
                 }
             })
@@ -64,6 +68,7 @@ class Tunnel(
         val useEventLoop = this.route.pac != null
         if (useEventLoop) {
             val eventLoop = this@Tunnel.clientChannel.eventLoop()
+            val startAt = System.currentTimeMillis()
             OutboundRoutingThreads.run {
                 val outboundConfig = try {
                     // This may take some time.(For PAC)
@@ -73,6 +78,10 @@ class Tunnel(
                     null
                 }
                 eventLoop.execute {
+                    val duration = System.currentTimeMillis() - startAt
+                    if (duration > 1500) {
+                        LOG.warn("It take {} millis to routing {}:{}", duration, targetAddress.hostString, targetAddress.port)
+                    }
                     this@Tunnel.connectServer0(outboundConfig, localAddress, targetAddress, user)
                 }
             }

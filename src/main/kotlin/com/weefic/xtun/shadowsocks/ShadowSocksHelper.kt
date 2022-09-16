@@ -6,6 +6,8 @@ import io.netty.channel.ChannelPipeline
 
 fun ShadowsocksEncryptionMethod.config(pipeline: ChannelPipeline, password: String) {
     when (this) {
+        ShadowsocksEncryptionMethod.None -> {
+        }
         ShadowsocksEncryptionMethod.AES128GCM -> {
             pipeline.addLast(ShadowSocksInboundAEADDecoder(password, AES128GCMCipherProvider()))
             pipeline.addLast(ShadowSocksOutboundAEADEncoder(password, AES128GCMCipherProvider()))

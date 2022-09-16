@@ -56,15 +56,11 @@ fun main() {
             TunnelRouteConfig("in1", "out1"),
         ),
         inbound = listOf(
-            TunnelInboundConfig.Socks5(
-                "in1", 8899, users = listOf(
-                    UserCredential("zy", "zysoft.COM")
-                )
-            )
+            TunnelInboundConfig.Http("in1", 1112),
         ),
         outbound = listOf(
-            TunnelOutboundConfig.Http("out1", "127.0.0.1", 1087)
-        ),
+            TunnelOutboundConfig.Socks5("out1", "8.219.130.225", 3308, user = UserCredential("zy", "DDmt5nUUc5zmlkwHPLrixA7dql3lGMYM"))
+        )
     )
     xtun(config)
 }

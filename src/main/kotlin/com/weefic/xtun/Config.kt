@@ -11,6 +11,9 @@ data class UserCredential(
 )
 
 enum class ShadowsocksEncryptionMethod {
+    @JsonProperty("none")
+    None,
+
     @JsonProperty("aes-128-gcm")
     AES128GCM,
 
@@ -67,6 +70,7 @@ enum class ShadowsocksEncryptionMethod {
     JsonSubTypes.Type(name = "http", value = TunnelInboundConfig.Http::class),
     JsonSubTypes.Type(name = "socks5", value = TunnelInboundConfig.Socks5::class),
     JsonSubTypes.Type(name = "shadowsocks", value = TunnelInboundConfig.Shadowsocks::class),
+    JsonSubTypes.Type(name = "nat", value = TunnelInboundConfig.NAT::class),
 )
 sealed class TunnelInboundConfig {
     abstract val id: String
@@ -93,6 +97,14 @@ sealed class TunnelInboundConfig {
         @JsonProperty(required = true) override val port: Int,
         @JsonProperty(required = true) val method: ShadowsocksEncryptionMethod,
         @JsonProperty(required = true) val password: String,
+        @JsonProperty(required = false) override val host: String? = null,
+    ) : TunnelInboundConfig()
+
+    data class NAT(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = true, value = "server_host") val serverHost: String,
+        @JsonProperty(required = true, value = "server_port") val serverPort: Int,
         @JsonProperty(required = false) override val host: String? = null,
     ) : TunnelInboundConfig()
 }
