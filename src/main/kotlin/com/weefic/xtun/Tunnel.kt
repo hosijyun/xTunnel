@@ -41,8 +41,11 @@ class Tunnel(
             this.clientConnection.peerWritableChanged()
         }
 
-    private fun connectServer0(outboundConfig: TunnelOutboundConfig?, clientAddress: InetSocketAddress, localAddress: InetSocketAddress, targetAddress: InetSocketAddress, user: String?) {
-        if (outboundConfig != null) {
+    private fun connectServer0(routerMatchingResult: RouterMatchingResult?, clientAddress: InetSocketAddress, localAddress: InetSocketAddress, user: String?) {
+        if (routerMatchingResult != null) {
+            val outboundConfig = routerMatchingResult.outbound
+            val targetAddress = routerMatchingResult.targetAddress
+
             val startAt = System.currentTimeMillis()
             ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, targetAddress, object : ServerConnectionCompletionListener {
                 override fun complete(isSuccess: Boolean) {
@@ -82,12 +85,12 @@ class Tunnel(
                     if (duration > 1500) {
                         LOG.warn("It take {} millis to routing {}:{}", duration, targetAddress.hostString, targetAddress.port)
                     }
-                    this@Tunnel.connectServer0(outboundConfig, clientAddress, localAddress, targetAddress, user)
+                    this@Tunnel.connectServer0(outboundConfig, clientAddress, localAddress, user)
                 }
             }
         } else {
             val outboundConfig = this@Tunnel.route.getOutboundConfig(localAddress, clientAddress, targetAddress, user)
-            this.connectServer0(outboundConfig, clientAddress, localAddress, targetAddress, user)
+            this.connectServer0(outboundConfig, clientAddress, localAddress, user)
         }
     }
 

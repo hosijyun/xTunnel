@@ -45,7 +45,14 @@ class ServerConnectionSocks5InboundHandler(
             message.writeBytes(byteArrayOf(SocksVersion.SOCKS5.byteValue(), 1, Socks5AuthMethod.NO_AUTH.byteValue()))
         }
         val hostBytes = this.host.encodeToByteArray()
-        message.writeBytes(byteArrayOf(SocksVersion.SOCKS5.byteValue(), Socks5CommandType.CONNECT.byteValue(), 0x00, Socks5AddressType.DOMAIN.byteValue()))
+        message.writeBytes(
+            byteArrayOf(
+                SocksVersion.SOCKS5.byteValue(),
+                Socks5CommandType.CONNECT.byteValue(),
+                0x00,
+                Socks5AddressType.DOMAIN.byteValue()
+            )
+        )
         message.writeByte(hostBytes.size)
         message.writeBytes(hostBytes)
         message.writeByte(this.port.ushr(8))
@@ -64,6 +71,7 @@ class ServerConnectionSocks5InboundHandler(
                     this.processInitialResponse(ctx, version, method)
                 }
             }
+
             State.WaitAuthenticationResult -> {
                 if (msg.readableBytes() >= 2) {
                     val version = msg.readByte()
@@ -71,6 +79,7 @@ class ServerConnectionSocks5InboundHandler(
                     this.processAuthenticationResponse(ctx, version, result)
                 }
             }
+
             State.WaitServerConnectResult -> {
                 if (msg.readableBytes() > 4) {
                     val readerIndex = msg.readerIndex()
@@ -87,6 +96,7 @@ class ServerConnectionSocks5InboundHandler(
                                 return
                             }
                         }
+
                         Socks5AddressType.DOMAIN -> {
                             val length = msg.readUnsignedByte().toInt()
                             if (msg.readableBytes() >= length + 2) {
@@ -96,6 +106,7 @@ class ServerConnectionSocks5InboundHandler(
                                 return
                             }
                         }
+
                         Socks5AddressType.IPv6 -> {
                             if (msg.readableBytes() >= 18) {
                                 msg.skipBytes(16)
@@ -104,6 +115,7 @@ class ServerConnectionSocks5InboundHandler(
                                 return
                             }
                         }
+
                         else -> {
                             LOG.warn("Unknown response address type : {}", addressType)
                             this.state = State.Inconsistent
@@ -115,12 +127,14 @@ class ServerConnectionSocks5InboundHandler(
                     this.processServerConnectResponse(ctx, version, status)
                 }
             }
+
             State.Streaming -> {
                 out.add(msg.readRetainedSlice(msg.readableBytes()))
             }
+
             State.Inconsistent -> {
                 val available = msg.readableBytes()
-                LOG.debug("Inconsistent state. Drop {} bytes data", available)
+                LOG.info("Inconsistent state. Drop {} bytes data", available)
                 msg.skipBytes(available)
             }
         }
@@ -128,10 +142,11 @@ class ServerConnectionSocks5InboundHandler(
 
     private fun processInitialResponse(ctx: ChannelHandlerContext, version: SocksVersion, method: Socks5AuthMethod) {
         val expectedMethod = if (this.credential == null) Socks5AuthMethod.NO_AUTH else Socks5AuthMethod.PASSWORD
-        val expectedNextStatus = if (this.credential == null) State.WaitServerConnectResult else State.WaitAuthenticationResult
+        val expectedNextStatus =
+            if (this.credential == null) State.WaitServerConnectResult else State.WaitAuthenticationResult
         if (version == SocksVersion.SOCKS5) {
             if (method == expectedMethod) {
-                LOG.debug("Process initial response using {} authentication method", expectedMethod)
+                LOG.info("Process initial response using {} authentication method", expectedMethod)
                 this.state = expectedNextStatus
             } else {
                 LOG.warn("Server require {} authentication method. We support {} only.", method, expectedMethod)
@@ -145,9 +160,13 @@ class ServerConnectionSocks5InboundHandler(
         }
     }
 
-    private fun processAuthenticationResponse(ctx: ChannelHandlerContext, version: Byte, result: Socks5PasswordAuthStatus) {
+    private fun processAuthenticationResponse(
+        ctx: ChannelHandlerContext,
+        version: Byte,
+        result: Socks5PasswordAuthStatus
+    ) {
         if (version == 1.toByte() && result.isSuccess) {
-            LOG.debug("Password authentication success.")
+            LOG.info("Password authentication success.")
             this.state = State.WaitServerConnectResult
         } else {
             LOG.warn("Password authentication failed.")
@@ -156,15 +175,19 @@ class ServerConnectionSocks5InboundHandler(
         }
     }
 
-    private fun processServerConnectResponse(ctx: ChannelHandlerContext, version: SocksVersion, status: Socks5CommandStatus) {
+    private fun processServerConnectResponse(
+        ctx: ChannelHandlerContext,
+        version: SocksVersion,
+        status: Socks5CommandStatus
+    ) {
         if (version == SocksVersion.SOCKS5) {
             if (status == Socks5CommandStatus.SUCCESS) {
-                LOG.debug("Server connection established.")
+                LOG.info("Server connection established.")
                 this.state = State.Streaming
                 ctx.fireChannelRead(ServerConnectionResult.Success)
                 ctx.pipeline().remove(this)
             } else {
-                LOG.debug("Server connect failed : {}", status)
+                LOG.info("Server connect failed : {}", status)
                 this.state = State.Inconsistent
                 ctx.fireChannelRead(ServerConnectionResult.DataFlowInvalid)
                 ctx.close()

@@ -26,6 +26,7 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
                 LOG.debug(LOG_PREFIX, "Server read {} bytes", msg.readableBytes())
                 this.tunnel.clientConnection.write(msg)
             }
+
             is ServerConnectionResult -> {
                 if (msg == ServerConnectionResult.Success) {
                     LOG.info(LOG_PREFIX, "Server connection established")
@@ -35,6 +36,7 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
                     this.tunnel.serverConnectionNegotiationFailed(msg)
                 }
             }
+
             else -> {
                 LOG.debug(LOG_PREFIX, "Server read {} message", msg.javaClass)
                 this.tunnel.clientConnection.write(msg)
@@ -73,12 +75,14 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
-            LOG.info("Server write {} bytes", msg.readableBytes())
+            if (LOG.isDebugEnabled) {
+                LOG.info("Server write {} bytes : [{}]", msg.readableBytes(), "...")
+            } else {
+                LOG.info("Server write {} bytes", msg.readableBytes())
+            }
         } else {
             LOG.warn("Server write Unknown message : {}", msg.javaClass)
         }
         super.write(ctx, msg, promise)
     }
-
-
 }

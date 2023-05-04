@@ -27,11 +27,13 @@ class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : Cha
                 LOG.debug(LOG_PREFIX, "Client read {} bytes", msg.readableBytes())
                 this.tunnel.writeToServer(msg)
             }
+
             is ServerConnectionRequest -> {
                 LOG.info(LOG_PREFIX, "Connecting server")
                 this.tunnel.connectServer(msg.address, msg.user)
                 ReferenceCountUtil.release(msg)
             }
+
             else -> {
                 LOG.debug(LOG_PREFIX, "Client read {} message", msg.javaClass)
                 this.tunnel.writeToServer(msg)
@@ -69,7 +71,11 @@ class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : Cha
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
-            LOG.info("Client write {} bytes", msg.readableBytes())
+            if (LOG.isDebugEnabled) {
+                LOG.debug("Client write {} bytes : [{}]", msg.readableBytes(), "...")
+            } else {
+                LOG.info("Client write {} bytes", msg.readableBytes())
+            }
         } else {
             LOG.warn("Client write Unknown message : {}", msg.javaClass)
         }

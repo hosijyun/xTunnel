@@ -2,6 +2,7 @@ package com.weefic.xtun
 
 import com.weefic.xtun.handlers.InboundHttpRequestDecoder
 import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
+import com.weefic.xtun.inbound.ClientConnectionLoggerHandler
 import com.weefic.xtun.inbound.ClientConnectionNATInboundHandler
 import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
 import com.weefic.xtun.shadowsocks.ShadowSocksHostDecoder
@@ -26,6 +27,8 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
         }
         val pipeline = clientChannel.pipeline()
         val tunnel = Tunnel(clientChannel, this.route)
+
+        pipeline.addLast(ClientConnectionLoggerHandler(tunnel.connectionId))
         when (inbound) {
             is TunnelInboundConfig.Http -> {
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, HttpRequestDecoder())
@@ -33,17 +36,26 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
                 pipeline.addLast(ClientConnectionHttpProxyInboundHandler.HTTP_ENCODER_NAME, InboundHttpRequestDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
+
             is TunnelInboundConfig.Socks5 -> {
                 pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.users))
                 pipeline.addLast(tunnel.clientConnection)
             }
+
             is TunnelInboundConfig.Shadowsocks -> {
                 inbound.method.config(pipeline, inbound.password)
                 pipeline.addLast(ShadowSocksHostDecoder())
                 pipeline.addLast(tunnel.clientConnection)
             }
+
             is TunnelInboundConfig.NAT -> {
-                pipeline.addLast(ClientConnectionNATInboundHandler(tunnel.connectionId, inbound.serverHost, inbound.serverPort))
+                pipeline.addLast(
+                    ClientConnectionNATInboundHandler(
+                        tunnel.connectionId,
+                        inbound.serverHost,
+                        inbound.serverPort
+                    )
+                )
                 pipeline.addLast(tunnel.clientConnection)
             }
         }

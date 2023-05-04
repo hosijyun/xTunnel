@@ -163,10 +163,16 @@ data class TunnelRouteMatchConfig(
     val pac: String? = null,
 )
 
+data class TunnelRouteRedirectConfig(
+    @JsonProperty(value = "from", required = true) val from: String,
+    @JsonProperty(value = "to", required = true) val to: String,
+)
+
 data class TunnelRouteConfig(
     @JsonProperty(required = true, value = "in") val inbound: String,
     @JsonProperty(required = true, value = "out") val outbound: String,
     @JsonProperty(required = false, value = "match") val match: TunnelRouteMatchConfig? = null,
+    @JsonProperty(required = false, value = "redirect") val redirect: List<TunnelRouteRedirectConfig>? = null,
 )
 
 class TunnelConfig(
