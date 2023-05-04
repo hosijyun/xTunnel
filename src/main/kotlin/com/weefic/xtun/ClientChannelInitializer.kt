@@ -1,10 +1,7 @@
 package com.weefic.xtun
 
 import com.weefic.xtun.handlers.InboundHttpRequestDecoder
-import com.weefic.xtun.inbound.ClientConnectionHttpProxyInboundHandler
-import com.weefic.xtun.inbound.ClientConnectionLoggerHandler
-import com.weefic.xtun.inbound.ClientConnectionNATInboundHandler
-import com.weefic.xtun.inbound.ClientConnectionSocks5InboundHandler
+import com.weefic.xtun.inbound.*
 import com.weefic.xtun.shadowsocks.ShadowSocksHostDecoder
 import com.weefic.xtun.shadowsocks.config
 import io.netty.channel.ChannelInitializer
@@ -54,6 +51,16 @@ class ClientChannelInitializer(val route: TunnelRoute) : ChannelInitializer<Sock
                         tunnel.connectionId,
                         inbound.serverHost,
                         inbound.serverPort
+                    )
+                )
+                pipeline.addLast(tunnel.clientConnection)
+            }
+
+            is TunnelInboundConfig.MTProto -> {
+                pipeline.addLast(
+                    ClientConnectionMTProtoInboundHandler(
+                        tunnel.connectionId,
+                        inbound.secret,
                     )
                 )
                 pipeline.addLast(tunnel.clientConnection)

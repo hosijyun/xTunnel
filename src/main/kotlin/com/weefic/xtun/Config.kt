@@ -71,6 +71,7 @@ enum class ShadowsocksEncryptionMethod {
     JsonSubTypes.Type(name = "socks5", value = TunnelInboundConfig.Socks5::class),
     JsonSubTypes.Type(name = "shadowsocks", value = TunnelInboundConfig.Shadowsocks::class),
     JsonSubTypes.Type(name = "nat", value = TunnelInboundConfig.NAT::class),
+    JsonSubTypes.Type(name = "mtproto", value = TunnelInboundConfig.MTProto::class),
 )
 sealed class TunnelInboundConfig {
     abstract val id: String
@@ -105,6 +106,13 @@ sealed class TunnelInboundConfig {
         @JsonProperty(required = true) override val port: Int,
         @JsonProperty(required = true, value = "server_host") val serverHost: String,
         @JsonProperty(required = true, value = "server_port") val serverPort: Int,
+        @JsonProperty(required = false) override val host: String? = null,
+    ) : TunnelInboundConfig()
+
+    data class MTProto(
+        @JsonProperty(required = true) override val id: String,
+        @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = true) val secret: String,
         @JsonProperty(required = false) override val host: String? = null,
     ) : TunnelInboundConfig()
 }
