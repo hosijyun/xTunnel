@@ -5,11 +5,12 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.channel.socket.SocketChannel
 import org.slf4j.LoggerFactory
+import java.util.*
 
 
 class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeerConnection(channel) {
     companion object {
-        val LOG = LoggerFactory.getLogger(ServerConnection::class.java)
+        val LOG = LoggerFactory.getLogger("ServerConnection")
     }
 
     private var LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-${this.tunnel.connectionId}")
@@ -45,7 +46,7 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
     }
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
-        LOG.info("Server read complete")
+        LOG.info(LOG_PREFIX, "Server read complete")
         this.tunnel.clientConnection.flush()
         if (this.tunnel.clientWritable) {
             ctx.read()
@@ -63,7 +64,7 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         super.channelInactive(ctx)
-        LOG.info("Server inactive")
+        LOG.info(LOG_PREFIX, "Server inactive")
         this.tunnel.serverClosed()
     }
 
@@ -76,12 +77,14 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
             if (LOG.isDebugEnabled) {
-                LOG.info("Server write {} bytes : [{}]", msg.readableBytes(), "...")
+                val buffer = ByteArray(msg.readableBytes())
+                msg.getBytes(msg.readerIndex(), buffer)
+                LOG.info(LOG_PREFIX, "Server write {} bytes : [{}]", msg.readableBytes(), Base64.getEncoder().encodeToString(buffer))
             } else {
-                LOG.info("Server write {} bytes", msg.readableBytes())
+                LOG.info(LOG_PREFIX, "Server write {} bytes", msg.readableBytes())
             }
         } else {
-            LOG.warn("Server write Unknown message : {}", msg.javaClass)
+            LOG.warn(LOG_PREFIX, "Server write Unknown message : {}", msg.javaClass)
         }
         super.write(ctx, msg, promise)
     }

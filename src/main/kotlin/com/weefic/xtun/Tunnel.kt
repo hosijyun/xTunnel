@@ -1,10 +1,12 @@
 package com.weefic.xtun
 
+import io.netty.buffer.ByteBuf
 import io.netty.channel.socket.SocketChannel
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.helpers.BasicMarkerFactory
 import java.net.InetSocketAddress
+import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
@@ -68,13 +70,13 @@ class Tunnel(
         this.connectServerRequested = true
         val localAddress = this.clientChannel.localAddress()!!
         val clientAddress = this.clientChannel.remoteAddress()!!
-        val useEventLoop = this.route.pac != null
+        val useEventLoop = this.route.pac != null || this.route.geoip != null
         if (useEventLoop) {
             val eventLoop = this@Tunnel.clientChannel.eventLoop()
             val startAt = System.currentTimeMillis()
             OutboundRoutingThreads.run {
                 val outboundConfig = try {
-                    // This may take some time.(For PAC)
+                    // This may take some time.(For PAC || GEOIP)
                     this@Tunnel.route.getOutboundConfig(localAddress, clientAddress, targetAddress, user)
                 } catch (e: Exception) {
                     LOG.warn("Failed to get outbound config.", e)

@@ -40,7 +40,9 @@ object ServerConnectionFactory {
                 EchoConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
-
+            is TunnelOutboundConfig.Reject -> {
+                completeHandler.complete(false)
+            }
         }
     }
 

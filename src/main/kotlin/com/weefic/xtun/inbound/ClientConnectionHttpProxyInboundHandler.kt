@@ -15,7 +15,8 @@ import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.util.*
 
-class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredentials: List<UserCredential>?) : ChannelInboundHandlerAdapter() {
+class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCredentials: List<UserCredential>?) :
+    ChannelInboundHandlerAdapter() {
     companion object {
         const val HTTP_DECODER_NAME = "HTTP_DECODER"
         const val HTTP_ENCODER_NAME = "HTTP_ENCODER"
@@ -37,29 +38,43 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
     private var serverConnectedVarConnect = false
 
 
-    private fun accept(authorization: String?): Pair<String?, Boolean> {
+    private fun accept(userCredential: UserCredential?): Boolean {
         val credentials = this.userCredentials
-        if (credentials == null) {
-            return null to true
-        } else {
-            if (authorization != null) {
-                val authBase64 = authorization.substringAfter("Basic ")
-                val authBytes = try {
-                    Base64.getDecoder().decode(authBase64)
-                } catch (e: Exception) {
-                    null
-                }
-                if (authBytes != null) {
-                    for (credential in credentials) {
-                        val checkBytes = "${credential.user}:${credential.password}".encodeToByteArray()
-                        if (authBytes.contentEquals(checkBytes)) {
-                            return credential.user to true
-                        }
+        if (credentials.isNullOrEmpty()) {
+            return true
+        } else if (userCredential != null) {
+            for (credential in credentials) {
+                if (credential.user == "*" || credential.user == userCredential.user) {
+                    if (credential.password == "*" || credential.password == userCredential.password) {
+                        return true
                     }
                 }
             }
-            return null to false
+            return false
+        } else {
+            return credentials.any { it.user == "*" && it.password == "*" }
         }
+    }
+
+    private fun parseAuthorizationCredential(authorization: String?): UserCredential? {
+        if (authorization != null) {
+            val authBase64 = authorization.substringAfter("Basic ")
+            val authBytes = try {
+                Base64.getDecoder().decode(authBase64)
+            } catch (e: Exception) {
+                null
+            }
+            if (authBytes != null) {
+                val authToken = authBytes.decodeToString()
+                val splitIndex = authToken.indexOf(':')
+                if (splitIndex >= 0) {
+                    val providedUser = authToken.substring(0, splitIndex)
+                    val providedPassword = authToken.substring(splitIndex + 1)
+                    return UserCredential(providedUser, providedPassword)
+                }
+            }
+        }
+        return null
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, obj: Any) {
@@ -68,38 +83,62 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                 if (obj is HttpRequest) {
                     val headers = obj.headers()
                     // 收到HTTP请求
-                    val (user, accepted) = this.accept(headers.get(HttpHeaderNames.PROXY_AUTHORIZATION))
+                    val authorization = headers.get(HttpHeaderNames.PROXY_AUTHORIZATION)
+                    val userCredential = this.parseAuthorizationCredential(authorization)
+                    val accepted = this.accept(userCredential)
                     if (accepted) {
                         headers.set(HttpHeaderNames.CONNECTION, "Close")
                         headers.remove(HttpHeaderNames.PROXY_CONNECTION)
                         headers.remove(HttpHeaderNames.PROXY_AUTHORIZATION)
                         val (host, port) = this.identifyHostAndPort(obj)
                         val address = InetSocketAddress.createUnresolved(host, port)
-                        LOG.info(LOG_PREFIX, "Request accepted with method '{}', destination server is {}:{} ", obj.method(), host, port)
+                        LOG.info(
+                            LOG_PREFIX,
+                            "Request accepted with method '{}', destination server is {}:{} ",
+                            obj.method(),
+                            host,
+                            port
+                        )
                         if (obj.method() == HttpMethod.CONNECT) {
                             // 使用CONNECT模式
                             LOG.info(LOG_PREFIX, "Connection is negotiating.")
-                            this.transferMode = TransferMode.ConnectNegotiating(address, user)
+                            this.transferMode = TransferMode.ConnectNegotiating(address, userCredential?.user)
                             ReferenceCountUtil.release(obj)
                         } else {
                             // 使用非CONNECT模式
                             LOG.info(LOG_PREFIX, "Ready for connect destination server using HTTP-Message mode")
                             this.transferMode = TransferMode.HttpMessaging
-                            ctx.fireChannelRead(ServerConnectionRequest(address, user))
+                            ctx.fireChannelRead(ServerConnectionRequest(address, userCredential?.user))
                             ctx.fireChannelRead(obj)
                         }
                     } else {
                         this.transferMode = TransferMode.Terminated
                         LOG.info("Sending HTTP/1.1 407 Proxy Authentication Required")
-                        ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 407 Proxy Authentication Required\r\n\r\n".toByteArray())).addListener(ChannelFutureListener.CLOSE)
+                        val content = "<html><body>Authenticator required</body></html>"
+                        val message =
+                            "HTTP/1.1 407 Proxy Authentication Required\r\n" +
+                                    "Content-Length: ${content.encodeToByteArray().size}\r\n" +
+                                    "Content-Type: text/html; charset=utf-8\r\n" +
+                                    "Proxy-Authenticate: Basic realm=\"Authentication required\"\r\n" +
+                                    "\r\n" +
+                                    content
+
+                        ctx.writeAndFlush(
+                            ctx.alloc().buffer().writeBytes(message.toByteArray())
+                        ).addListener(ChannelFutureListener.CLOSE)
                     }
                 } else {
-                    LOG.warn(LOG_PREFIX, "Transfer mode is undetermined but we got message type : {}. The connection will be disconnected.", obj.javaClass)
+                    LOG.warn(
+                        LOG_PREFIX,
+                        "Transfer mode is undetermined but we got message type : {}. The connection will be disconnected.",
+                        obj.javaClass
+                    )
                     this.transferMode = TransferMode.Terminated
                     ReferenceCountUtil.release(obj)
                     ctx.close()
                 }
             }
+
             is TransferMode.ConnectNegotiating -> {
                 when (obj) {
                     is LastHttpContent -> {
@@ -109,19 +148,26 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
                         ReferenceCountUtil.release(obj)
                     }
+
                     is HttpContent -> {
                         // Chunk...Ignore
                         LOG.info(LOG_PREFIX, "Negotiating.")
                         ReferenceCountUtil.release(obj)
                     }
+
                     else -> {
-                        LOG.warn(LOG_PREFIX, "Negotiation on progress but we got message type : {}. The connection will be disconnected.", obj.javaClass)
+                        LOG.warn(
+                            LOG_PREFIX,
+                            "Negotiation on progress but we got message type : {}. The connection will be disconnected.",
+                            obj.javaClass
+                        )
                         this.transferMode = TransferMode.Terminated
                         ReferenceCountUtil.release(obj)
                         ctx.close()
                     }
                 }
             }
+
             is TransferMode.ConnectStreaming -> {
                 if (obj is ByteBuf) {
                     LOG.debug(LOG_PREFIX, "Streaming data")
@@ -133,6 +179,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                     ctx.close()
                 }
             }
+
             is TransferMode.HttpMessaging -> {
                 when (obj) {
                     is LastHttpContent -> {
@@ -140,10 +187,12 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                         LOG.debug(LOG_PREFIX, "Streaming last http message")
                         ctx.fireChannelRead(obj)
                     }
+
                     is HttpContent -> {
                         LOG.debug(LOG_PREFIX, "Streaming http message")
                         ctx.fireChannelRead(obj)
                     }
+
                     else -> {
                         LOG.info(LOG_PREFIX, "Unknown message when streaming http message : {}", obj.javaClass)
                         this.transferMode = TransferMode.Terminated
@@ -152,6 +201,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                     }
                 }
             }
+
             TransferMode.Terminated -> {
                 LOG.info(LOG_PREFIX, "Streaming terminated. But got message : {}", obj.javaClass)
                 ReferenceCountUtil.release(obj)
@@ -166,7 +216,9 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                 if (!this.serverConnectedVarConnect) {
                     this.serverConnectedVarConnect = true
                     LOG.info("Sending HTTP/1.1 200 Connection established")
-                    ctx.writeAndFlush(ctx.alloc().buffer().writeBytes("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray()))
+                    ctx.writeAndFlush(
+                        ctx.alloc().buffer().writeBytes("HTTP/1.1 200 Connection established\r\n\r\n".toByteArray())
+                    )
                 } else {
                     LOG.warn("Duplicate ServerConnectionEstablishedEvent")
                 }

@@ -6,11 +6,13 @@ import io.netty.channel.ChannelPromise
 import io.netty.channel.socket.SocketChannel
 import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
+import java.util.*
 
 
 class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : ChannelPeerConnection(channel) {
     companion object {
         private val LOG = LoggerFactory.getLogger("Client-Connection")
+        const val NAME = "ClientConnection"
     }
 
     private val LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-${tunnel.connectionId}")
@@ -72,12 +74,14 @@ class ClientConnection(private val tunnel: Tunnel, channel: SocketChannel) : Cha
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
             if (LOG.isDebugEnabled) {
-                LOG.debug("Client write {} bytes : [{}]", msg.readableBytes(), "...")
+                val buffer = ByteArray(msg.readableBytes())
+                msg.getBytes(msg.readerIndex(), buffer)
+                LOG.debug(LOG_PREFIX, "Client write {} bytes : [{}]", msg.readableBytes(), Base64.getEncoder().encodeToString(buffer))
             } else {
-                LOG.info("Client write {} bytes", msg.readableBytes())
+                LOG.info(LOG_PREFIX, "Client write {} bytes", msg.readableBytes())
             }
         } else {
-            LOG.warn("Client write Unknown message : {}", msg.javaClass)
+            LOG.warn(LOG_PREFIX, "Client write Unknown message : {}", msg.javaClass)
         }
         super.write(ctx, msg, promise)
     }

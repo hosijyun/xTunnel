@@ -10,10 +10,12 @@ import io.netty.channel.ChannelPromise
 import org.slf4j.LoggerFactory
 import java.net.InetSocketAddress
 import java.security.MessageDigest
-import java.security.SecureRandom
+import java.util.*
 import javax.crypto.Cipher
 import javax.crypto.spec.IvParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import kotlin.math.abs
+import kotlin.random.Random
 
 class ClientConnectionMTProtoInboundHandler(
     connectionId: Long,
@@ -21,12 +23,13 @@ class ClientConnectionMTProtoInboundHandler(
 ) : ChannelDuplexHandler() {
     companion object {
         private val LOG = LoggerFactory.getLogger("client-connection-mtproto")
+        private const val FAST_MODE = true
         private val DC_IPV4 = arrayOf(
-            "149.154.175.50",
+            "149.154.175.53",
             "149.154.167.51",
             "149.154.175.100",
             "149.154.167.91",
-            "149.154.171.5"
+            "91.108.56.130"
         )
     }
 
@@ -41,11 +44,11 @@ class ClientConnectionMTProtoInboundHandler(
     private var status = Status.Handshaking
 
     private val clientToProxyCoder = Cipher.getInstance("AES/CTR/NoPadding")
-    private val proxyToServerCoder = Cipher.getInstance("AES/CTR/NoPadding")
+    private val proxyToClientCoder = Cipher.getInstance("AES/CTR/NoPadding")
     private var clientBuffer: ByteBuf? = null
 
+    private val proxyToServerCoder = Cipher.getInstance("AES/CTR/NoPadding")
     private val serverToProxyCoder = Cipher.getInstance("AES/CTR/NoPadding")
-    private val proxyToClientCoder = Cipher.getInstance("AES/CTR/NoPadding")
 
     init {
         val sharedSecret = ByteArray(secret.length / 2)
@@ -57,6 +60,10 @@ class ClientConnectionMTProtoInboundHandler(
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (msg is ByteBuf) {
+            val message = ByteArray(msg.readableBytes())
+            msg.getBytes(msg.readerIndex(), message)
+            LOG.info("Client data : ${Base64.getEncoder().encodeToString(message)}")
+
             when (val status = this.status) {
                 Status.Inactive -> ctx.close()
                 Status.Handshaking -> {
@@ -85,121 +92,89 @@ class ClientConnectionMTProtoInboundHandler(
     }
 
     private fun doHandshake(ctx: ChannelHandlerContext, buffer: ByteBuf) {
-        val clientHandshakeData = ByteArray(64)
-        buffer.readBytes(clientHandshakeData)
-        val clientHandshakeDataInv = clientHandshakeData.reversedArray()
-
-        val clientSharedDecryptKey = clientHandshakeData.sliceArray(8 until 40)
-        val clientSharedDecryptIV = clientHandshakeData.sliceArray(40 until 56)
-        val clientSharedEncryptKey = clientHandshakeDataInv.sliceArray(8 until 40)
-        val clientSharedEncryptIV = clientHandshakeDataInv.sliceArray(40 until 56)
-
         val sha256 = MessageDigest.getInstance("SHA256")
-        sha256.update(clientSharedDecryptKey)
+
+        val clientInit = ByteArray(64)
+        buffer.readBytes(clientInit)
+        val clientInitRev = clientInit.reversedArray()
+
+        val clientDecryptKey = clientInit.sliceArray(8 until 40)
+        val clientDecryptIV = clientInit.sliceArray(40 until 56)
+        val clientEncryptKey = clientInitRev.sliceArray(8 until 40)
+        val clientEncryptIV = clientInitRev.sliceArray(40 until 56)
+
+        sha256.update(clientDecryptKey)
         sha256.update(this.sharedSecret)
-        val clientDecryptKey = sha256.digest()
+        val clientDataDecryptKey = sha256.digest()
 
         sha256.reset()
-        sha256.update(clientSharedEncryptKey)
+        sha256.update(clientEncryptKey)
         sha256.update(this.sharedSecret)
-        val clientEncryptKey = sha256.digest()
+        val clientDataEncryptKey = sha256.digest()
 
-        this.clientToProxyCoder.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(clientDecryptKey, "AES"),
-            IvParameterSpec(clientSharedDecryptIV)
-        )
-        this.proxyToClientCoder.init(
-            Cipher.ENCRYPT_MODE,
-            SecretKeySpec(clientEncryptKey, "AES"),
-            IvParameterSpec(clientSharedEncryptIV)
-        )
+        this.clientToProxyCoder.init(Cipher.DECRYPT_MODE, SecretKeySpec(clientDataDecryptKey, "AES"), IvParameterSpec(clientDecryptIV))
+        this.proxyToClientCoder.init(Cipher.ENCRYPT_MODE, SecretKeySpec(clientDataEncryptKey, "AES"), IvParameterSpec(clientEncryptIV))
 
-        val decodedHandshake = this.clientToProxyCoder.doFinal(clientHandshakeData)
-        val protocol = decodedHandshake.sliceArray(56 until 60)
-        val dataCenterIndex = Endian.LE.getShort(decodedHandshake, 60).toInt() - 1
+        val clientInitPlainData = this.clientToProxyCoder.update(clientInit)
+        val protocol = Endian.LE.getInt(clientInitPlainData, 56)
+        if (protocol != 0xefefefefL.toInt() && protocol != 0xeeeeeeeeL.toInt() && protocol != 0xddddddddL.toInt()) {
+            ctx.close()
+            buffer.release()
+            this.status = Status.Inactive
+            return
+        }
+        val dataCenterValue = Endian.LE.getShort(clientInitPlainData, 60)
+        val dataCenterIndex = abs(dataCenterValue.toInt()) - 1
         if (dataCenterIndex < 0 || dataCenterIndex >= DC_IPV4.size) {
             ctx.close()
             buffer.release()
             this.status = Status.Inactive
+            return
         }
         val dataCenter = DC_IPV4[dataCenterIndex]
-
-        ctx.fireChannelRead(
-            ServerConnectionRequest(
-                InetSocketAddress.createUnresolved(
-                    dataCenter,
-                    443
-                ), null
-            )
-        )
-
-        val serverHandshakeData = this.generateTGHandshakeData()
-        protocol.copyInto(serverHandshakeData, 56)
-        val serverHandshakeDataInv = serverHandshakeData.reversedArray()
-
-        val serverSharedEncryptKey = serverHandshakeData.sliceArray(8 until 40)
-        val serverSharedEncryptIV = serverHandshakeData.sliceArray(40 until 56)
-        val serverSharedDecryptKey = serverHandshakeDataInv.sliceArray(8 until 40)
-        val serverSharedDecryptIV = serverHandshakeDataInv.sliceArray(40 until 56)
-        this.proxyToServerCoder.init(
-            Cipher.ENCRYPT_MODE,
-            SecretKeySpec(serverSharedEncryptKey, "AES"),
-            IvParameterSpec(serverSharedEncryptIV)
-        )
-        this.serverToProxyCoder.init(
-            Cipher.DECRYPT_MODE,
-            SecretKeySpec(serverSharedDecryptKey, "AES"),
-            IvParameterSpec(serverSharedDecryptIV)
-        )
-        val encryptedServerHandshakeData = this.proxyToServerCoder.update(serverHandshakeData)
-        check(encryptedServerHandshakeData != null && encryptedServerHandshakeData.size == 64)
-        encryptedServerHandshakeData.copyInto(serverHandshakeData, 56, 56, 64)
-        ctx.fireChannelRead(ctx.alloc().buffer().writeBytes(serverHandshakeData))
-
+        ctx.fireChannelRead(ServerConnectionRequest(InetSocketAddress.createUnresolved(dataCenter, 443), null))
         this.status = Status.Established
-        this.processClientData(ctx, buffer)
-    }
 
-    private fun generateTGHandshakeData(): ByteArray {
-        val serverHandshakeData = ByteArray(64)
-        while (true) {
-            SecureRandom().nextBytes(serverHandshakeData)
-            if (serverHandshakeData[0] == 0xef.toByte()) {
-                continue
-            }
-            val firstInt = Endian.LE.getInt(serverHandshakeData, 0)
-            when (firstInt) {
-                0x44414548,
-                0x54534f50,
-                0x20544547,
-                0x4954504f,
-                0x02010316,
-                0xddddddddL.toInt(),
-                0xeeeeeeeeL.toInt() -> continue
-            }
-            val secondInt = Endian.LE.getInt(serverHandshakeData, 4)
-            if (secondInt == 0) {
-                continue
-            }
-            break
+        // Server Handshake
+        val serverInit = ByteArray(64)
+        Random.nextBytes(serverInit)
+        if (FAST_MODE) {
+            clientDataDecryptKey.copyInto(serverInit, 8)
+            clientDecryptIV.copyInto(serverInit, 40)
         }
-        return serverHandshakeData
+        Endian.LE.putInt(serverInit, 56, protocol)
+        val serverInitRev = serverInit.reversedArray()
+
+        val serverEncryptKey = serverInit.copyOfRange(8, 40)
+        val serverEncryptIV = serverInit.copyOfRange(40, 56)
+        val serverDecryptKey = serverInitRev.copyOfRange(8, 40)
+        val serverDecryptIV = serverInitRev.copyOfRange(40, 56)
+        this.proxyToServerCoder.init(Cipher.ENCRYPT_MODE, SecretKeySpec(serverEncryptKey, "AES"), IvParameterSpec(serverEncryptIV))
+        this.serverToProxyCoder.init(Cipher.DECRYPT_MODE, SecretKeySpec(serverDecryptKey, "AES"), IvParameterSpec(serverDecryptIV))
+        val encryptedServerInit = this.proxyToServerCoder.update(serverInit)
+        ctx.fireChannelRead(
+            ctx.alloc().buffer()
+                .writeBytes(serverInit, 0, 56)
+                .writeBytes(encryptedServerInit, 56, 8)
+        )
+        // Process remaining data
+        this.processClientData(ctx, buffer)
+        ctx.fireChannelReadComplete()
     }
 
     private fun processClientData(ctx: ChannelHandlerContext, clientBuffer: ByteBuf) {
-        if (clientBuffer.readableBytes() > 0) {
-            val buffer = ByteArray(clientBuffer.readableBytes())
-            clientBuffer.readBytes(buffer)
-            val plainData = this.clientToProxyCoder.update(buffer)
-            if (plainData != null) {
-                val encodedData = this.proxyToServerCoder.update(plainData)
-                if (encodedData != null) {
-                    ctx.fireChannelRead(ctx.alloc().buffer().writeBytes(encodedData))
-                }
-            }
+        //if (clientBuffer.readableBytes() > 0) {
+        if (FAST_MODE) {
+            ctx.fireChannelRead(clientBuffer)
+        } else {
+            val clientData = ByteArray(clientBuffer.readableBytes())
+            clientBuffer.readBytes(clientData)
+            val plainData = this.clientToProxyCoder.update(clientData)
+            val toServerData = this.proxyToServerCoder.update(plainData)
+            ctx.fireChannelRead(ctx.alloc().buffer().writeBytes(toServerData))
+            //}
+            clientBuffer.release()
         }
-        clientBuffer.release()
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
@@ -212,28 +187,20 @@ class ClientConnectionMTProtoInboundHandler(
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
             when (this.status) {
-                Status.Inactive, Status.Handshaking -> {
+                Status.Inactive,
+                Status.Handshaking -> {
                     msg.release()
                     promise.setSuccess()
                     ctx.close()
                 }
 
                 Status.Established -> {
-                    val buffer = ByteArray(msg.readableBytes())
-                    msg.readBytes(buffer)
+                    val serverData = ByteArray(msg.readableBytes())
+                    msg.readBytes(serverData)
                     msg.release()
-
-                    val plainData = this.serverToProxyCoder.update(buffer)
-                    if (plainData != null) {
-                        val encodedData = this.proxyToClientCoder.update(plainData)
-                        if (encodedData != null) {
-                            ctx.write(ctx.alloc().buffer().writeBytes(encodedData), promise)
-                        } else {
-                            promise.setSuccess()
-                        }
-                    } else {
-                        promise.setSuccess()
-                    }
+                    val plainData = this.serverToProxyCoder.update(serverData)
+                    val toClientData = this.proxyToClientCoder.update(plainData)
+                    ctx.write(ctx.alloc().buffer().writeBytes(toClientData), promise)
                 }
             }
         } else {

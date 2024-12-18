@@ -24,23 +24,45 @@ class ServerChannelInitializer(
                 pipeline.addLast(ServerConnectionDirectInboundHandler())
                 pipeline.addLast(serverConnection)
             }
+
             is TunnelOutboundConfig.Http -> {
-                pipeline.addLast(ServerConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME, ConnectRequestHttpResponseDecoder())
-                pipeline.addLast(ServerConnectionHttpProxyInboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.user))
+                pipeline.addLast(
+                    ServerConnectionHttpProxyInboundHandler.HTTP_DECODER_NAME,
+                    ConnectRequestHttpResponseDecoder()
+                )
+                pipeline.addLast(
+                    ServerConnectionHttpProxyInboundHandler(
+                        this.tunnel.connectionId,
+                        this.targetAddress.hostString,
+                        this.targetAddress.port,
+                        this.outboundConfig.user
+                    )
+                )
                 pipeline.addLast(serverConnection)
                 pipeline.addLast(PureHttpRequestEncoder()) // Write CONNECT Request
             }
+
             is TunnelOutboundConfig.Socks5 -> {
-                pipeline.addLast(ServerConnectionSocks5InboundHandler(this.tunnel.connectionId, this.targetAddress.hostString, this.targetAddress.port, this.outboundConfig.user))
+                pipeline.addLast(
+                    ServerConnectionSocks5InboundHandler(
+                        this.tunnel.connectionId,
+                        this.targetAddress.hostString,
+                        this.targetAddress.port,
+                        this.outboundConfig.user
+                    )
+                )
                 pipeline.addLast(serverConnection)
             }
+
             is TunnelOutboundConfig.Shadowsocks -> {
                 this.outboundConfig.method.config(pipeline, this.outboundConfig.password)
                 pipeline.addLast(ShadowSocksHostEncoder(this.targetAddress.hostString, this.targetAddress.port))
                 pipeline.addLast(serverConnection)
             }
+
             is TunnelOutboundConfig.Blackhole -> throw UnsupportedOperationException("Blackhole unsupported")
             is TunnelOutboundConfig.Echo -> throw UnsupportedOperationException("Echo unsupported")
+            is TunnelOutboundConfig.Reject -> throw UnsupportedOperationException("Reject unsupported")
 
         }
     }
