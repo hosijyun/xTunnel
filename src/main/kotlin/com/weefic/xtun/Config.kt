@@ -12,6 +12,17 @@ data class UserCredential(
     @JsonProperty(required = true) val password: String
 )
 
+data class TlsKeyPair(
+    @JsonProperty(required = true, value = "id") val id: String,
+    @JsonProperty(required = true, value = "certificatePath") val certificate: String,
+    @JsonProperty(required = true, value = "keyPath") val keyPath: String,
+)
+
+data class TlsConfig(
+    @JsonProperty(required = true, value = "keyPairs")
+    val keyPairs: List<TlsKeyPair>,
+)
+
 enum class ShadowsocksEncryptionMethod {
     @JsonProperty("none")
     None,

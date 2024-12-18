@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory
 import java.io.File
 
 
-class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val bossGroup: NioEventLoopGroup) : ChannelInitializer<SocketChannel>() {
+class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val tlsConfig: TlsConfig?, val bossGroup: NioEventLoopGroup) : ChannelInitializer<SocketChannel>() {
     companion object {
         val LOG = LoggerFactory.getLogger("Client-Initializer")
     }
@@ -51,7 +51,13 @@ class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?
             pipeline.addLast(ClientConnectionLoggerHandler(tunnel.connectionId))
             val tls = inbound.tls
             if (tls != null) {
-                val sslContext: SslContext = SslContextBuilder.forServer(File("cert.pem"), File("key.pem")).build()
+                val keyPair = tlsConfig?.keyPairs?.firstOrNull { it.id == tls }
+                if (keyPair == null) {
+                    LOG.info("No key found for '{}'", tls)
+                    clientChannel.close()
+                    return
+                }
+                val sslContext: SslContext = SslContextBuilder.forServer(File(keyPair.certificate), File(keyPair.keyPath)).build()
                 pipeline.addLast("ssl", sslContext.newHandler(clientChannel.alloc()));
             }
             when (inbound) {

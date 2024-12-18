@@ -7,7 +7,7 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import org.slf4j.LoggerFactory
 
-fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null, webConfig: WebConfig? = null) {
+fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null, webConfig: WebConfig? = null, tlsConfig: TlsConfig? = null) {
     val LOG = LoggerFactory.getLogger("Startup")
     val bossGroup = NioEventLoopGroup(1)
     val workerGroup = NioEventLoopGroup()
@@ -22,7 +22,7 @@ fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null, webConfig: WebConf
             .option(ChannelOption.SO_REUSEADDR, true)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
             .childOption(ChannelOption.AUTO_READ, false)
-            .childHandler(ClientChannelInitializer(route, webConfig, bossGroup))
+            .childHandler(ClientChannelInitializer(route, webConfig, tlsConfig, bossGroup))
         val addresses = config.proxies.values.map { it.host to it.port }.toMutableList()
         if (webConfig != null) {
             addresses.add(webConfig.host to webConfig.port)
