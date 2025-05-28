@@ -14,7 +14,7 @@ dependencies {
     api group: 'io.netty', name: 'netty-all', version: '4.1.72.Final'
     api group: 'ch.qos.logback', name: 'logback-classic', version: '1.2.10'
     api group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.70'
-    api group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.13.1'
+    api group: 'com.fasterxml.jackson.core', name: 'jackson-annotations', version: '2.16.0'
     api group: 'com.maxmind.geoip2', name: 'geoip2', version: '4.2.0'
 }
 
@@ -23,5 +23,5 @@ test {
 }
 
 kotlin {
-    jvmToolchain(11)
+    jvmToolchain(21)
 }

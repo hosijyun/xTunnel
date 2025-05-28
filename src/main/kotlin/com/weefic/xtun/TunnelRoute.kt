@@ -1,6 +1,7 @@
 package com.weefic.xtun
 
 import com.maxmind.geoip2.DatabaseReader
+import com.weefic.xtun.utils.matchWildcard
 import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
@@ -94,6 +95,24 @@ private class TunnelOutboundRoute {
         return target
     }
 
+    private fun matchAny(host: String, port: Int, addresses: Set<String>): Boolean {
+        for (address in addresses) {
+            val colon = address.lastIndexOf(':')
+            if (colon == -1) {
+                // Any port
+                if (host.matchWildcard(address)) {
+                    return true
+                }
+            } else {
+                if ("$host:$port".matchWildcard(address)) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+
+
     fun match(
         user: String?,
         clientAddress: InetSocketAddress,
@@ -109,14 +128,14 @@ private class TunnelOutboundRoute {
         if (!this.clientAddresses.isNullOrEmpty()) {
             val host = clientAddress.hostString.lowercase()
             val port = clientAddress.port
-            if (!this.clientAddresses.contains("$host:$port") && !this.clientAddresses.contains("$host:*")) {
+            if (!matchAny(host, port, this.clientAddresses)) {
                 return null
             }
         }
         if (!this.serverAddresses.isNullOrEmpty()) {
             val host = targetAddress.hostString.lowercase()
             val port = targetAddress.port
-            if (!this.serverAddresses.contains("$host:$port") && !this.serverAddresses.contains("$host:*")) {
+            if (!matchAny(host, port, this.serverAddresses)) {
                 return null
             }
         }
