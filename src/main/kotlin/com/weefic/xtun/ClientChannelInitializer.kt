@@ -12,14 +12,14 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpRequestDecoder
 import io.netty.handler.codec.http.HttpResponseEncoder
+import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.stream.ChunkedWriteHandler
 import org.slf4j.LoggerFactory
-import java.io.File
 
 
-class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val tlsConfig: TlsConfig?, val bossGroup: NioEventLoopGroup) : ChannelInitializer<SocketChannel>() {
+class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val tlsConfigs: List<TlsConfig>?, val bossGroup: NioEventLoopGroup) : ChannelInitializer<SocketChannel>() {
     companion object {
         val LOG = LoggerFactory.getLogger("Client-Initializer")
     }
@@ -50,14 +50,17 @@ class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?
 
             pipeline.addLast(ClientConnectionLoggerHandler(tunnel.connectionId))
             val tls = inbound.tls
-            if (tls != null) {
-                val keyPair = tlsConfig?.keyPairs?.firstOrNull { it.id == tls }
-                if (keyPair == null) {
-                    LOG.info("No key found for '{}'", tls)
+            if (!tls.isNullOrEmpty()) {
+                val tlsConfig = this.tlsConfigs?.firstOrNull { it.id == tls }
+                if (tlsConfig == null) {
+                    LOG.info("No tls config found for '{}'", tls)
                     clientChannel.close()
                     return
                 }
-                val sslContext: SslContext = SslContextBuilder.forServer(File(keyPair.certificate), File(keyPair.keyPath)).build()
+                val sslContext: SslContext = SslContextBuilder
+                    .forServer(tlsConfig.key, tlsConfig.certificate)
+                    .clientAuth(ClientAuth.NONE)
+                    .build()
                 pipeline.addLast("ssl", sslContext.newHandler(clientChannel.alloc()));
             }
             when (inbound) {

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import java.security.PrivateKey
+import java.security.cert.X509Certificate
 import java.util.*
 
 
@@ -12,15 +14,10 @@ data class UserCredential(
     @JsonProperty(required = true) val password: String
 )
 
-data class TlsKeyPair(
-    @JsonProperty(required = true, value = "id") val id: String,
-    @JsonProperty(required = true, value = "certificatePath") val certificate: String,
-    @JsonProperty(required = true, value = "keyPath") val keyPath: String,
-)
-
 data class TlsConfig(
-    @JsonProperty(required = true, value = "keyPairs")
-    val keyPairs: List<TlsKeyPair>,
+    @JsonProperty(required = true, value = "id") val id: String,
+    @JsonProperty(required = true, value = "key") val key: PrivateKey,
+    @JsonProperty(required = true, value = "certificate") val certificate: List<X509Certificate>,
 )
 
 enum class ShadowsocksEncryptionMethod {
@@ -220,5 +217,5 @@ open class TunnelConfig(
     @JsonProperty(required = true, value = "proxies") val proxies: Map<String, TunnelInboundConfig>,
     @JsonProperty(required = false, value = "out") val outbound: Map<String, TunnelOutboundConfig> = mapOf(),
     @JsonProperty(required = false, value = "assets") val assets: TunnelAssets? = null,
-    @JsonProperty(required = false, value = "defaultRules") val defaultRules: List<TunnelRouteConfig> = mutableListOf(),
+    @JsonProperty(required = false, value = "defaultRules") val defaultRules: List<TunnelRouteConfig> = listOf(),
 )
