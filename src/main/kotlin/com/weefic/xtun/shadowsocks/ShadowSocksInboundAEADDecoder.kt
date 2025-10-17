@@ -20,9 +20,9 @@ class ShadowSocksInboundAEADDecoder(
         var cipher = this.cipher
         if (cipher == null) {
             if (input.readableBytes() >= this.cipherProvider.saltSize) {
-                val header = ByteArray(this.cipherProvider.saltSize)
-                input.readBytes(header)
-                cipher = this.cipherProvider.createCipher(false, this.password, header)
+                val salt = ByteArray(this.cipherProvider.saltSize)
+                input.readBytes(salt)
+                cipher = this.cipherProvider.createCipherForShadowsocks(false, this.password, salt)
                 this.cipher = cipher
             } else {
                 return

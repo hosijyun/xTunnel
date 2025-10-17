@@ -1,5 +1,6 @@
 package com.weefic.xtun
 
+import com.weefic.xtun.utils.ChannelLoggingUtils
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
@@ -10,43 +11,44 @@ import java.util.*
 
 class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeerConnection(channel) {
     companion object {
-        val LOG = LoggerFactory.getLogger("ServerConnection")
+        val LOG = LoggerFactory.getLogger("Server")
     }
 
-    private var LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-${this.tunnel.connectionId}")
+    private val LOG_TAG get() = this.tunnel.LOG_TAG
+    private var lastWriteBlocking: Long = -1
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
-        LOG.info(this.LOG_PREFIX, "Server Active")
+        LOG.debug(this.LOG_TAG, "Server connection active.")
     }
 
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         when (msg) {
             is ByteBuf -> {
-                LOG.debug(LOG_PREFIX, "Server read {} bytes", msg.readableBytes())
-                this.tunnel.clientConnection.write(msg)
+                LOG.debug(LOG_TAG, "Server read {} bytes", msg.readableBytes())
+                this.tunnel.writeToClient(msg)
             }
 
             is ServerConnectionResult -> {
                 if (msg == ServerConnectionResult.Success) {
-                    LOG.info(LOG_PREFIX, "Server connection established")
+                    LOG.debug(LOG_TAG, "Server connection established")
                     this.tunnel.serverConnectionEstablished(this)
                 } else {
-                    LOG.info(LOG_PREFIX, "Server connection failed")
+                    LOG.debug(LOG_TAG, "Server connection failed")
                     this.tunnel.serverConnectionNegotiationFailed(msg)
                 }
             }
 
             else -> {
-                LOG.debug(LOG_PREFIX, "Server read {} message", msg.javaClass)
-                this.tunnel.clientConnection.write(msg)
+                LOG.debug(LOG_TAG, "Server read {} message", msg.javaClass)
+                this.tunnel.writeToClient(msg)
             }
         }
     }
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
-        LOG.info(LOG_PREFIX, "Server read complete")
+        LOG.debug(LOG_TAG, "Server read complete")
         this.tunnel.clientConnection.flush()
         if (this.tunnel.clientWritable) {
             ctx.read()
@@ -56,7 +58,19 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
 
     override fun channelWritabilityChanged(ctx: ChannelHandlerContext) {
         val writable = ctx.channel().isWritable
-        LOG.info(LOG_PREFIX, "Server writability changed to {}", writable)
+        if (writable) {
+            if (this.lastWriteBlocking != -1L) {
+                val duration = System.currentTimeMillis() - this.lastWriteBlocking
+                if (duration > 200L) {
+                    LOG.warn(LOG_TAG, "Server write unblocked after {} ms.", duration)
+                } else {
+                    LOG.debug(LOG_TAG, "Server write unblocked after {} ms.", duration)
+                }
+            }
+        } else {
+            this.lastWriteBlocking = System.currentTimeMillis()
+            LOG.debug(LOG_TAG, "Server write blocked.")
+        }
         this.tunnel.serverWritable = writable
         super.channelWritabilityChanged(ctx)
     }
@@ -64,8 +78,13 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         super.channelInactive(ctx)
-        LOG.info(LOG_PREFIX, "Server inactive")
+        LOG.debug(LOG_TAG, "Server connection inactive.")
         this.tunnel.serverClosed()
+    }
+
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+        ChannelLoggingUtils.logChannelException(LOG, LOG_TAG, "Server exception occurred.", cause)
+        ctx.close()
     }
 
     override fun peerWritableChanged() {
@@ -76,15 +95,15 @@ class ServerConnection(val tunnel: Tunnel, channel: SocketChannel) : ChannelPeer
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is ByteBuf) {
-            if (LOG.isDebugEnabled) {
+            if (LOG.isTraceEnabled) {
                 val buffer = ByteArray(msg.readableBytes())
                 msg.getBytes(msg.readerIndex(), buffer)
-                LOG.info(LOG_PREFIX, "Server write {} bytes : [{}]", msg.readableBytes(), Base64.getEncoder().encodeToString(buffer))
+                LOG.trace(LOG_TAG, "Server write {} bytes : [{}]", msg.readableBytes(), Base64.getEncoder().encodeToString(buffer))
             } else {
-                LOG.info(LOG_PREFIX, "Server write {} bytes", msg.readableBytes())
+                LOG.debug(LOG_TAG, "Server write {} bytes", msg.readableBytes())
             }
         } else {
-            LOG.warn(LOG_PREFIX, "Server write Unknown message : {}", msg.javaClass)
+            LOG.warn(LOG_TAG, "Server write Unknown message : {}", msg.javaClass)
         }
         super.write(ctx, msg, promise)
     }

@@ -2,11 +2,11 @@ package com.weefic.xtun.web
 
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.EventLoopGroup
 import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.handler.codec.http.FullHttpRequest
 
-class WebServerHandler(private val webConfig: WebConfig, private val bossGroup: NioEventLoopGroup) : SimpleChannelInboundHandler<FullHttpRequest>(true) {
+class WebServerHandler(private val webConfig: WebConfig, private val bossGroup: EventLoopGroup) : SimpleChannelInboundHandler<FullHttpRequest>(true) {
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
         ctx.read()

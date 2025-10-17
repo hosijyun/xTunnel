@@ -20,33 +20,47 @@ object ServerConnectionFactory {
             is TunnelOutboundConfig.Direct -> {
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, address, address, completeHandler)
             }
+
             is TunnelOutboundConfig.Http -> {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
+
             is TunnelOutboundConfig.Socks5 -> {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
+
             is TunnelOutboundConfig.Shadowsocks -> {
                 val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
+
             is TunnelOutboundConfig.Blackhole -> {
                 BlackholeConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
+
             is TunnelOutboundConfig.Echo -> {
                 EchoConnection(tunnel, eventLoop)
                 completeHandler.complete(true)
             }
+
             is TunnelOutboundConfig.Reject -> {
                 completeHandler.complete(false)
             }
         }
     }
 
-    private fun connect0(tunnel: Tunnel, eventLoop: EventLoop, outboundConfig: TunnelOutboundConfig, localAddress: InetSocketAddress, serverAddress: InetSocketAddress, targetAddress: InetSocketAddress, completeHandler: ServerConnectionCompletionListener) {
+    private fun connect0(
+        tunnel: Tunnel,
+        eventLoop: EventLoop,
+        outboundConfig: TunnelOutboundConfig,
+        localAddress: InetSocketAddress,
+        serverAddress: InetSocketAddress,
+        targetAddress: InetSocketAddress,
+        completeHandler: ServerConnectionCompletionListener
+    ) {
         val serverConnectionBootstrap = Bootstrap()
         serverConnectionBootstrap
             .group(eventLoop)
@@ -55,6 +69,7 @@ object ServerConnectionFactory {
             .option(ChannelOption.SO_KEEPALIVE, true)
             .handler(ServerChannelInitializer(tunnel, outboundConfig, targetAddress))
         val usingLocalAddress = InetSocketAddress(localAddress.hostString, 0)
+        LOG.info(tunnel.LOG_TAG, "Connecting {}:{}", serverAddress.hostString, serverAddress.port)
         serverConnectionBootstrap.connect(serverAddress, null).addListener {
             if (!it.isSuccess) {
                 LOG.info("Connect {} failed", serverAddress, it.cause())

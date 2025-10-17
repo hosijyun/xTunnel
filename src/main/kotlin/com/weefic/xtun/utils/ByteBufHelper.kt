@@ -1,6 +1,7 @@
 package com.weefic.xtun.utils
 
 import io.netty.buffer.ByteBuf
+import kotlin.io.encoding.Base64
 
 fun ByteBuf.getText(): String {
     val buffer = ByteArray(this.readableBytes())
@@ -272,4 +273,14 @@ fun ByteBuf.hexDump(): String {
     val buffer = ByteArray(this.readableBytes())
     this.getBytes(this.readerIndex(), buffer)
     return buffer.joinToString(" ") { HEX[it.toInt() and 0xFF] }
+}
+
+fun ByteBuf.dumpBase64(): String {
+    return Base64.encode(this.dumData())
+}
+
+fun ByteBuf.dumData(): ByteArray {
+    val buffer = ByteArray(this.readableBytes())
+    this.getBytes(this.readerIndex(), buffer)
+    return buffer
 }

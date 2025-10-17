@@ -80,6 +80,8 @@ enum class ShadowsocksEncryptionMethod {
     JsonSubTypes.Type(name = "mix", value = TunnelInboundConfig.Mix::class),
     JsonSubTypes.Type(name = "http", value = TunnelInboundConfig.Http::class),
     JsonSubTypes.Type(name = "socks5", value = TunnelInboundConfig.Socks5::class),
+    JsonSubTypes.Type(name = "trojan", value = TunnelInboundConfig.Trojan::class),
+    JsonSubTypes.Type(name = "vmess", value = TunnelInboundConfig.VMess::class),
     JsonSubTypes.Type(name = "shadowsocks", value = TunnelInboundConfig.Shadowsocks::class),
     JsonSubTypes.Type(name = "nat", value = TunnelInboundConfig.NAT::class),
     JsonSubTypes.Type(name = "mtproto", value = TunnelInboundConfig.MTProto::class),
@@ -113,6 +115,23 @@ sealed class TunnelInboundConfig {
         @JsonProperty(required = true) override val port: Int,
         @JsonProperty(required = false) override val host: String? = null,
         @JsonProperty(required = false) val users: List<UserCredential> = emptyList(),
+        @JsonProperty(required = false) override val rule: List<TunnelRouteConfig> = emptyList(),
+        @JsonProperty(required = false) override val useDefaultRules: Boolean = false,
+        @JsonProperty(required = false) override val tls: String? = null,
+    ) : TunnelInboundConfig()
+
+    data class Trojan(
+        @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = false) override val host: String? = null,
+        @JsonProperty(required = false) val passwords: List<String> = emptyList(),
+        @JsonProperty(required = false) override val rule: List<TunnelRouteConfig> = emptyList(),
+        @JsonProperty(required = false) override val useDefaultRules: Boolean = false,
+        @JsonProperty(required = false) override val tls: String? = null,
+    ) : TunnelInboundConfig()
+
+    data class VMess(
+        @JsonProperty(required = true) override val port: Int,
+        @JsonProperty(required = false) override val host: String? = null,
         @JsonProperty(required = false) override val rule: List<TunnelRouteConfig> = emptyList(),
         @JsonProperty(required = false) override val useDefaultRules: Boolean = false,
         @JsonProperty(required = false) override val tls: String? = null,
@@ -218,4 +237,5 @@ open class TunnelConfig(
     @JsonProperty(required = false, value = "out") val outbound: Map<String, TunnelOutboundConfig> = mapOf(),
     @JsonProperty(required = false, value = "assets") val assets: TunnelAssets? = null,
     @JsonProperty(required = false, value = "defaultRules") val defaultRules: List<TunnelRouteConfig> = listOf(),
+    @JsonProperty(required = false, value = "dns") val dns: List<String> = listOf(),
 )

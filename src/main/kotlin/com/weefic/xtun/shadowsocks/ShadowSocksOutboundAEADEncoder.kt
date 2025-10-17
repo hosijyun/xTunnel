@@ -25,7 +25,7 @@ class ShadowSocksOutboundAEADEncoder(
     init {
         this.salt = ByteArray(this.cipherProvider.saltSize)
         Random.nextBytes(this.salt)
-        this.cipher = cipherProvider.createCipher(true, this.password, this.salt)
+        this.cipher = cipherProvider.createCipherForShadowsocks(true, this.password, this.salt)
     }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
@@ -41,7 +41,7 @@ class ShadowSocksOutboundAEADEncoder(
             val buffer = ctx.alloc().heapBuffer(MAX_MESSAGE_LENGTH)
             buffer.ensureWritable(MAX_MESSAGE_LENGTH)
             val bufferBytes = buffer.array()
-            val bufferOffset = buffer.arrayOffset()
+            val bufferOffset = buffer.arrayOffset() + buffer.readerIndex()
             try {
                 var processedDataSize = 0
                 for (i in 0 until groupCount) {

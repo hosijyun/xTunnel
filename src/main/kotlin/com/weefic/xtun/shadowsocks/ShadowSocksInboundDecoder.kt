@@ -38,7 +38,7 @@ class ShadowSocksInboundDecoder(
         val input = msg as ByteBuf
         val cipher = this.getCipher(input)
         if (cipher == null) {
-            // Cipher not ready yet
+            // Cipher is not ready yet
             input.release()
             if (!ctx.channel().config().isAutoRead) {
                 ctx.channel().read()
@@ -47,5 +47,10 @@ class ShadowSocksInboundDecoder(
             cipher.process(input)
             super.channelRead(ctx, input)
         }
+    }
+
+    override fun channelActive(ctx: ChannelHandlerContext?) {
+        this.cipher?.close()
+        super.channelActive(ctx)
     }
 }

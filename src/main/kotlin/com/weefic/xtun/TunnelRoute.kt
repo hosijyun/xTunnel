@@ -2,9 +2,14 @@ package com.weefic.xtun
 
 import com.maxmind.geoip2.DatabaseReader
 import com.weefic.xtun.utils.matchWildcard
+import io.netty.resolver.dns.DnsNameResolver
 import java.io.File
 import java.net.InetAddress
 import java.net.InetSocketAddress
+import java.util.*
+import java.util.concurrent.locks.ReentrantReadWriteLock
+import kotlin.concurrent.read
+import kotlin.concurrent.write
 
 class RouterMatchingResult(
     val outbound: TunnelOutboundConfig,
@@ -21,7 +26,12 @@ private class TunnelOutboundRoute {
     private val geoip: DatabaseReader?
     private val countries: Set<String>?
     private val outboundConfig: TunnelOutboundConfig
+    private val dnsResolver: DnsNameResolver?
 
+    companion object {
+        private val DNS_CACHE = WeakHashMap<String, InetAddress>()
+        private val DNS_CACHE_LOCK = ReentrantReadWriteLock()
+    }
 
     constructor(outboundConfig: TunnelOutboundConfig = TunnelOutboundConfig.Reject()) {
         this.always = true
@@ -33,6 +43,7 @@ private class TunnelOutboundRoute {
         this.geoip = null
         this.countries = null
         this.redirect = null
+        this.dnsResolver = null
     }
 
     constructor(
@@ -40,6 +51,7 @@ private class TunnelOutboundRoute {
         outboundConfigs: Map<String, TunnelOutboundConfig>,
         pacs: Map<String, PAC>?,
         geoip: DatabaseReader?,
+        dnsResolver: DnsNameResolver?,
     ) {
         this.outboundConfig = outboundConfigs[routeConfig.outbound] ?: TunnelOutboundConfig.Reject()
         this.geoip = geoip
@@ -51,9 +63,10 @@ private class TunnelOutboundRoute {
         this.countries = match.countries.map { it.uppercase() }.toHashSet()
         this.always = this.users.isEmpty() && this.clientAddresses.isEmpty()
                 && this.serverAddresses.isEmpty() && this.pac == null && this.countries.isEmpty()
-        this.redirect = routeConfig.redirect?.map {
+        this.redirect = routeConfig.redirect.map {
             it.from.lowercase() to it.to.lowercase()
         }
+        this.dnsResolver = dnsResolver
     }
 
     private fun matchRedirection(targetAddress: InetSocketAddress): InetSocketAddress {
@@ -118,7 +131,7 @@ private class TunnelOutboundRoute {
         clientAddress: InetSocketAddress,
         targetAddress: InetSocketAddress
     ): RouterMatchingResult? {
-        val outboundConfig = this.outboundConfig ?: return null
+        val outboundConfig = this.outboundConfig
         if (this.always) { // Fast match
             return RouterMatchingResult(outboundConfig, this.matchRedirection(targetAddress))
         }
@@ -147,13 +160,41 @@ private class TunnelOutboundRoute {
         if (!this.countries.isNullOrEmpty()) {
             val geoip = this.geoip
             if (geoip == null) {
-                return null // Sorry, We don't know how to match it
+                return null
             } else {
-                val address = try {
-                    targetAddress.address ?: InetAddress.getByName(targetAddress.hostName)
-                } catch (e: Exception) {
-                    // UnknownHostException?
-                    return null
+                var address: InetAddress? = targetAddress.address
+                val hostString: String? = targetAddress.hostString
+                if (address == null) {
+                    if (hostString == null) {
+                        return null
+                    }
+                    address = DNS_CACHE_LOCK.read {
+                        DNS_CACHE[hostString]
+                    }
+                    if (address == null) {
+                        if (hostString.endsWith(".local.")) {
+                            return null
+                        }
+                        val resolver = this.dnsResolver
+                        val address = if (resolver != null) {
+                            try {
+                                resolver.resolve(hostString).sync().get()
+                            } catch (e: Exception) {
+                                // UnknownHostException?
+                                return null
+                            }
+                        } else {
+                            try {
+                                InetAddress.getByName(hostString)
+                            } catch (_: Exception) {
+                                // UnknownHostException?
+                                return null
+                            }
+                        }
+                        DNS_CACHE_LOCK.write {
+                            DNS_CACHE[hostString] = address
+                        }
+                    }
                 }
                 try {
                     val response = geoip.city(address)
@@ -173,8 +214,9 @@ private class TunnelOutboundRoute {
 class TunnelRoute(
     private val config: TunnelConfig,
     val pac: Map<String, PAC>?,
+    val dnsResolver: DnsNameResolver?,
 ) {
-    private val portToInboundConfig = this.config.proxies.values.associateBy { it.port }
+    private val portToInboundConfig = this.config.proxies.map { it.value.port to (it.key to it.value) }.toMap()
     private val routing: Map<Int, List<TunnelOutboundRoute>>
     val geoip = this.config.assets?.geoip?.let { DatabaseReader.Builder(File(it)).build() }
 
@@ -193,17 +235,17 @@ class TunnelRoute(
             val rule = if (it.useDefaultRules) it.rule + this.config.defaultRules else it.rule
             if (rule.isEmpty()) {
                 val defaultRoute = TunnelRouteConfig(outbound = "default")
-                it.port to listOf(TunnelOutboundRoute(defaultRoute, outboundIdToOutboundConfig, pac, geoip))
+                it.port to listOf(TunnelOutboundRoute(defaultRoute, outboundIdToOutboundConfig, pac, geoip, dnsResolver))
             } else {
                 it.port to rule.map { route ->
-                    TunnelOutboundRoute(route, outboundIdToOutboundConfig, pac, geoip)
+                    TunnelOutboundRoute(route, outboundIdToOutboundConfig, pac, geoip, dnsResolver)
                 }
             }
         }
     }
 
 
-    fun getInboundConfig(port: Int): TunnelInboundConfig? {
+    fun getInboundConfig(port: Int): Pair<String, TunnelInboundConfig>? {
         return this.portToInboundConfig[port]
     }
 

@@ -23,18 +23,18 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
         private val LOG = LoggerFactory.getLogger("Client-Connection-HTTPProxy")
     }
 
-    private val LOG_PREFIX = Tunnel.MARKERS.getDetachedMarker("-$connectionId")
+    private val LOG_TAG = Tunnel.MARKERS.getDetachedMarker("-$connectionId")
 
 
     private sealed class TransferMode {
-        object Undetermined : TransferMode()
+        object Initialize : TransferMode()
         object Terminated : TransferMode()
         object HttpMessaging : TransferMode()
         data class ConnectNegotiating(val address: InetSocketAddress, val user: String?) : TransferMode()
         object ConnectStreaming : TransferMode()
     }
 
-    private var transferMode: TransferMode = TransferMode.Undetermined
+    private var transferMode: TransferMode = TransferMode.Initialize
     private var serverConnectedVarConnect = false
 
 
@@ -79,7 +79,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
 
     override fun channelRead(ctx: ChannelHandlerContext, obj: Any) {
         when (val transferMode = this.transferMode) {
-            is TransferMode.Undetermined -> {
+            is TransferMode.Initialize -> {
                 if (obj is HttpRequest) {
                     val headers = obj.headers()
                     // 收到HTTP请求
@@ -92,21 +92,15 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                         headers.remove(HttpHeaderNames.PROXY_AUTHORIZATION)
                         val (host, port) = this.identifyHostAndPort(obj)
                         val address = InetSocketAddress.createUnresolved(host, port)
-                        LOG.info(
-                            LOG_PREFIX,
-                            "Request accepted with method '{}', destination server is {}:{} ",
-                            obj.method(),
-                            host,
-                            port
-                        )
+                        LOG.info(LOG_TAG, "Request accepted with method '{}', destination server is {}:{} ", obj.method(), host, port)
                         if (obj.method() == HttpMethod.CONNECT) {
                             // 使用CONNECT模式
-                            LOG.info(LOG_PREFIX, "Connection is negotiating.")
+                            LOG.info(LOG_TAG, "Connection is negotiating.")
                             this.transferMode = TransferMode.ConnectNegotiating(address, userCredential?.user)
                             ReferenceCountUtil.release(obj)
                         } else {
                             // 使用非CONNECT模式
-                            LOG.info(LOG_PREFIX, "Ready for connect destination server using HTTP-Message mode")
+                            LOG.info(LOG_TAG, "Ready for connect destination server using HTTP-Message mode")
                             this.transferMode = TransferMode.HttpMessaging
                             ctx.fireChannelRead(ServerConnectionRequest(address, userCredential?.user))
                             ctx.fireChannelRead(obj)
@@ -123,16 +117,10 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                                     "\r\n" +
                                     content
 
-                        ctx.writeAndFlush(
-                            ctx.alloc().buffer().writeBytes(message.toByteArray())
-                        ).addListener(ChannelFutureListener.CLOSE)
+                        ctx.writeAndFlush(ctx.alloc().buffer().writeBytes(message.toByteArray())).addListener(ChannelFutureListener.CLOSE)
                     }
                 } else {
-                    LOG.warn(
-                        LOG_PREFIX,
-                        "Transfer mode is undetermined but we got message type : {}. The connection will be disconnected.",
-                        obj.javaClass
-                    )
+                    LOG.warn(LOG_TAG, "Transfer mode is `initialize` but we got message type : {}. The connection will be disconnected.", obj.javaClass)
                     this.transferMode = TransferMode.Terminated
                     ReferenceCountUtil.release(obj)
                     ctx.close()
@@ -142,7 +130,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
             is TransferMode.ConnectNegotiating -> {
                 when (obj) {
                     is LastHttpContent -> {
-                        LOG.info(LOG_PREFIX, "Negotiation finished. Ready for connect destination server.")
+                        LOG.info(LOG_TAG, "Negotiation finished. Ready for connect destination server.")
                         this.transferMode = TransferMode.ConnectStreaming
                         ctx.fireChannelRead(ServerConnectionRequest(transferMode.address, transferMode.user))
                         ctx.pipeline().remove(HTTP_DECODER_NAME)
@@ -151,13 +139,13 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
 
                     is HttpContent -> {
                         // Chunk...Ignore
-                        LOG.info(LOG_PREFIX, "Negotiating.")
+                        LOG.info(LOG_TAG, "Negotiating.")
                         ReferenceCountUtil.release(obj)
                     }
 
                     else -> {
                         LOG.warn(
-                            LOG_PREFIX,
+                            LOG_TAG,
                             "Negotiation on progress but we got message type : {}. The connection will be disconnected.",
                             obj.javaClass
                         )
@@ -170,10 +158,10 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
 
             is TransferMode.ConnectStreaming -> {
                 if (obj is ByteBuf) {
-                    LOG.debug(LOG_PREFIX, "Streaming data")
+                    LOG.debug(LOG_TAG, "Streaming data")
                     ctx.fireChannelRead(obj)
                 } else {
-                    LOG.warn(LOG_PREFIX, "Unknown data to stream : {}", obj.javaClass)
+                    LOG.warn(LOG_TAG, "Unknown data to stream : {}", obj.javaClass)
                     this.transferMode = TransferMode.Terminated
                     ReferenceCountUtil.release(obj)
                     ctx.close()
@@ -184,17 +172,17 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
                 when (obj) {
                     is LastHttpContent -> {
                         this.transferMode = TransferMode.Terminated
-                        LOG.debug(LOG_PREFIX, "Streaming last http message")
+                        LOG.debug(LOG_TAG, "Streaming last http message")
                         ctx.fireChannelRead(obj)
                     }
 
                     is HttpContent -> {
-                        LOG.debug(LOG_PREFIX, "Streaming http message")
+                        LOG.debug(LOG_TAG, "Streaming http message")
                         ctx.fireChannelRead(obj)
                     }
 
                     else -> {
-                        LOG.info(LOG_PREFIX, "Unknown message when streaming http message : {}", obj.javaClass)
+                        LOG.info(LOG_TAG, "Unknown message when streaming http message : {}", obj.javaClass)
                         this.transferMode = TransferMode.Terminated
                         ReferenceCountUtil.release(obj)
                         ctx.close()
@@ -203,7 +191,7 @@ class ClientConnectionHttpProxyInboundHandler(connectionId: Long, val userCreden
             }
 
             TransferMode.Terminated -> {
-                LOG.info(LOG_PREFIX, "Streaming terminated. But got message : {}", obj.javaClass)
+                LOG.info(LOG_TAG, "Streaming terminated. But got message : {}", obj.javaClass)
                 ReferenceCountUtil.release(obj)
                 ctx.close()
             }

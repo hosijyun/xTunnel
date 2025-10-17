@@ -6,11 +6,11 @@ import io.netty.util.ReferenceCountUtil
 import org.slf4j.LoggerFactory
 import org.slf4j.helpers.BasicMarkerFactory
 import java.net.InetSocketAddress
-import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 
 class Tunnel(
+    private val inboundName: String,
     private val clientChannel: SocketChannel,
     private val route: TunnelRoute
 ) {
@@ -22,7 +22,7 @@ class Tunnel(
     }
 
     val connectionId = IDGenerator.incrementAndGet()
-    private val LOG_PREFIX = MARKERS.getDetachedMarker("-$connectionId")
+    var LOG_TAG = MARKERS.getDetachedMarker("$inboundName#$connectionId")
 
     val clientConnection = ClientConnection(this, this.clientChannel)
     private var clientClosed = false
@@ -42,31 +42,33 @@ class Tunnel(
             field = value
             this.clientConnection.peerWritableChanged()
         }
+    var clientBytes: Long = 0
+    var serverBytes: Long = 0
 
     private fun connectServer0(routerMatchingResult: RouterMatchingResult?, clientAddress: InetSocketAddress, localAddress: InetSocketAddress, user: String?) {
         if (routerMatchingResult != null) {
             val outboundConfig = routerMatchingResult.outbound
             val targetAddress = routerMatchingResult.targetAddress
-
             val startAt = System.currentTimeMillis()
             ServerConnectionFactory.connect(this, this.clientConnection.eventLoop, outboundConfig, localAddress, targetAddress, object : ServerConnectionCompletionListener {
                 override fun complete(isSuccess: Boolean) {
                     val duration = System.currentTimeMillis() - startAt
                     if (!isSuccess) {
-                        LOG.info(LOG_PREFIX, "Failed to connect server : {}:{}. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
+                        ClientConnection.LOG.info(LOG_TAG, "Failed to connect server : {}:{}. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
                         this@Tunnel.serverClosed()
                     } else {
-                        LOG.info(LOG_PREFIX, "Connect {}:{} successfully. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
+                        ClientConnection.LOG.info(LOG_TAG, "Connect {}:{} successfully. It take {} millis.", targetAddress.hostString, targetAddress.port, duration)
                     }
                 }
             })
         } else {
-            LOG.info(LOG_PREFIX, "No outbound config for client address : {}:{}, user : {}", clientAddress.hostString, clientAddress.port, user)
+            ClientConnection.LOG.info(LOG_TAG, "No outbound config for client address : {}:{}, user : {}", clientAddress.hostString, clientAddress.port, user)
             this@Tunnel.serverClosed()
         }
     }
 
     fun connectServer(targetAddress: InetSocketAddress, user: String?) {
+        this.LOG_TAG = MARKERS.getDetachedMarker("$inboundName#$connectionId][${targetAddress.hostString}:${targetAddress.port}")
         this.connectServerRequested = true
         val localAddress = this.clientChannel.localAddress()!!
         val clientAddress = this.clientChannel.remoteAddress()!!
@@ -79,13 +81,13 @@ class Tunnel(
                     // This may take some time.(For PAC || GEOIP)
                     this@Tunnel.route.getOutboundConfig(localAddress, clientAddress, targetAddress, user)
                 } catch (e: Exception) {
-                    LOG.warn("Failed to get outbound config.", e)
+                    ClientConnection.LOG.warn(LOG_TAG, "Failed to get outbound config.", e)
                     null
                 }
                 eventLoop.execute {
                     val duration = System.currentTimeMillis() - startAt
                     if (duration > 1500) {
-                        LOG.warn("It take {} millis to routing {}:{}", duration, targetAddress.hostString, targetAddress.port)
+                        ClientConnection.LOG.warn(LOG_TAG, "It take {} millis to routing {}:{}", duration, targetAddress.hostString, targetAddress.port)
                     }
                     this@Tunnel.connectServer0(outboundConfig, clientAddress, localAddress, user)
                 }
@@ -120,6 +122,11 @@ class Tunnel(
     }
 
     fun writeToServer(message: Any) {
+        if (LOG.isInfoEnabled) {
+            if (message is ByteBuf) {
+                this.clientBytes += message.readableBytes()
+            }
+        }
         val serverConnection = this.serverConnection
         if (serverConnection == null) {
             var buffer = this.proxyToServerBuffer
@@ -131,6 +138,15 @@ class Tunnel(
         } else {
             serverConnection.write(message)
         }
+    }
+
+    fun writeToClient(message: Any) {
+        if (LOG.isInfoEnabled) {
+            if (message is ByteBuf) {
+                this.serverBytes += message.readableBytes()
+            }
+        }
+        this.clientConnection.write(message)
     }
 
     fun clientClosed() {
@@ -164,7 +180,7 @@ class Tunnel(
     }
 
     private fun closed() {
-        LOG.info(LOG_PREFIX, "Tunnel closed")
+        LOG.info(LOG_TAG, "Tunnel closed. Upload {} bytes / Download {} bytes.", this.clientBytes, this.serverBytes)
         this.proxyToServerBuffer?.let {
             it.forEach(ReferenceCountUtil::release)
             this.proxyToServerBuffer = null

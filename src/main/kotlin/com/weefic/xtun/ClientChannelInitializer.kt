@@ -7,7 +7,7 @@ import com.weefic.xtun.shadowsocks.config
 import com.weefic.xtun.web.WebConfig
 import com.weefic.xtun.web.WebServerHandler
 import io.netty.channel.ChannelInitializer
-import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.EventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpRequestDecoder
@@ -16,20 +16,19 @@ import io.netty.handler.ssl.ClientAuth
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.stream.ChunkedWriteHandler
-import org.slf4j.LoggerFactory
 
 
-class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val tlsConfigs: List<TlsConfig>?, val bossGroup: NioEventLoopGroup) : ChannelInitializer<SocketChannel>() {
+class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?, val tlsConfigs: List<TlsConfig>?, val bossGroup: EventLoopGroup) : ChannelInitializer<SocketChannel>() {
     companion object {
-        val LOG = LoggerFactory.getLogger("Client-Initializer")
+        val LOG = XTUN_LOGGER
     }
 
     override fun initChannel(clientChannel: SocketChannel) {
         val clientAddress = clientChannel.remoteAddress().address.hostAddress
-        LOG.info("New client connection from : {}", clientAddress)
         val tunnelPort = clientChannel.localAddress().port
         val webConfig = this.webConfig
         if (webConfig != null && webConfig.port == tunnelPort) {
+            LOG.info("Start handling web request from client : {}", clientAddress)
             val pipeline = clientChannel.pipeline()
             pipeline.addLast(HttpRequestDecoder())
             pipeline.addLast(HttpObjectAggregator(65536))
@@ -37,23 +36,27 @@ class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?
             pipeline.addLast(ChunkedWriteHandler())
             pipeline.addLast(WebServerHandler(webConfig, this.bossGroup))
         } else {
-            val inbound = this.route.getInboundConfig(tunnelPort)
-            if (inbound == null) {
-                LOG.info("Connection from {} is rejected. Reason : No inbound config found", clientAddress)
+            val inboundConfig = this.route.getInboundConfig(tunnelPort)
+            LOG.info("New client connection from : {}", clientAddress)
+            if (inboundConfig == null) {
+                // WHY??
+                LOG.error("Connection from {} is rejected. Reason : No inbound config found for port {}.", clientAddress, tunnelPort)
                 clientChannel.close()
                 return
-            } else {
-                LOG.info("Accept client connection from {}. Using protocol {}", clientAddress, inbound.javaClass.simpleName)
             }
-            val pipeline = clientChannel.pipeline()
-            val tunnel = Tunnel(clientChannel, this.route)
+            val (inboundName, inbound) = inboundConfig
+            val tunnel = Tunnel(inboundName, clientChannel, this.route)
+            LOG.info(tunnel.LOG_TAG, "Accept client connection from {} with inbound proxy protocol {}", clientAddress, inbound.javaClass.simpleName)
 
-            pipeline.addLast(ClientConnectionLoggerHandler(tunnel.connectionId))
+            val pipeline = clientChannel.pipeline()
+            pipeline.addLast(ClientConnectionLoggerHandler(tunnel))
+
             val tls = inbound.tls
             if (!tls.isNullOrEmpty()) {
                 val tlsConfig = this.tlsConfigs?.firstOrNull { it.id == tls }
                 if (tlsConfig == null) {
-                    LOG.info("No tls config found for '{}'", tls)
+                    // Config error!!
+                    LOG.error(tunnel.LOG_TAG, "No tls config found for '{}'.", tls)
                     clientChannel.close()
                     return
                 }
@@ -78,6 +81,16 @@ class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?
 
                 is TunnelInboundConfig.Socks5 -> {
                     pipeline.addLast(ClientConnectionSocks5InboundHandler(tunnel.connectionId, inbound.users))
+                    pipeline.addLast(tunnel.clientConnection)
+                }
+
+                is TunnelInboundConfig.Trojan -> {
+                    pipeline.addLast(ClientConnectionTrojanInboundHandler(tunnel.connectionId, inbound.passwords))
+                    pipeline.addLast(tunnel.clientConnection)
+                }
+
+                is TunnelInboundConfig.VMess -> {
+                    pipeline.addLast(ClientConnectionVMessInboundHandler(tunnel.connectionId, listOf()))
                     pipeline.addLast(tunnel.clientConnection)
                 }
 

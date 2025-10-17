@@ -11,14 +11,14 @@ abstract class GenericAEADCipherProvider : AEADCipherProvider {
 
     protected abstract fun createCipher(): org.bouncycastle.crypto.modes.AEADCipher
 
-    override fun createCipher(encrypt: Boolean, password: String, salt: ByteArray): AEADCipher {
+    override fun createCipherForShadowsocks(encrypt: Boolean, password: String, salt: ByteArray): AEADCipher {
         val key = ShadowSocksKeyDerive.genericDeriveKey(password, this.keySize)
-        val subKey = getSubKey(key, salt)
+        val subKey = getShadowsocksSubKey(key, salt)
         val subKeyParameter = KeyParameter(subKey)
         return GenericAEADCipher(this.createCipher(), encrypt, subKeyParameter, this.tagSize, this.nonceSize)
     }
 
-    private fun getSubKey(key: ByteArray, salt: ByteArray): ByteArray {
+    private fun getShadowsocksSubKey(key: ByteArray, salt: ByteArray): ByteArray {
         val subKey = ByteArray(this.keySize)
         val generator = HKDFBytesGenerator(SHA1Digest())
         val parameters = HKDFParameters(key, salt, "ss-subkey".toByteArray())

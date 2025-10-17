@@ -5,6 +5,7 @@ import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import org.slf4j.LoggerFactory
+import java.net.Inet6Address
 import java.net.InetSocketAddress
 
 class HostPortMapping(
@@ -69,6 +70,7 @@ open class ShadowSocksHostDecoder() : ChannelInboundHandlerAdapter() {
                             return
                         }
                     }
+
                     TYPE_DOMAIN -> { // domain
                         if (buffer.readableBytes() >= 1) {
                             val domainLength = buffer.readByte().toInt() and 0xFF
@@ -85,14 +87,20 @@ open class ShadowSocksHostDecoder() : ChannelInboundHandlerAdapter() {
                             }
                         }
                     }
+
                     TYPE_IPV6 -> { // IPv6
-                        LOG.warn("IPv6 Unsupported. I'm lazy...")
-                        this.buffer = null
-                        this.hostDecoded = true
-                        buffer.release()
-                        ctx.channel().close()
-                        return
+                        if (buffer.readableBytes() >= 18) {
+                            val ipData = ByteArray(16)
+                            buffer.readBytes(ipData)
+                            val port = buffer.readShort().toInt() and 0xFFFF
+                            val host = Inet6Address.getByAddress(ipData).hostAddress
+                            this.buffer = null
+                            this.hostDecoded = true
+                            this.connect(ctx, host, port, buffer)
+                            return
+                        }
                     }
+
                     else -> {
                         this.buffer = null
                         this.hostDecoded = true

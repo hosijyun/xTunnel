@@ -1,10 +1,12 @@
 package com.weefic.xtun
 
+import com.weefic.xtun.utils.ChannelLoggingUtils
 import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.socket.SocketChannel
+import java.nio.channels.ClosedChannelException
 
 abstract class ChannelPeerConnection(protected val channel: SocketChannel) : ChannelDuplexHandler(), AbstractConnection {
     override fun channelActive(ctx: ChannelHandlerContext) {
@@ -17,19 +19,11 @@ abstract class ChannelPeerConnection(protected val channel: SocketChannel) : Cha
     }
 
     override fun write(message: Any) {
-        this.channel.write(message).addListener {
-            if (!it.isSuccess) {
-                ServerConnection.LOG.warn("Fail to write message to server.", it.cause())
-            }
-        }
+        this.channel.write(message)
     }
 
     override fun writeAndFlush(message: Any) {
-        this.channel.writeAndFlush(message).addListener {
-            if (!it.isSuccess) {
-                ServerConnection.LOG.warn("Fail to write message to server.", it.cause())
-            }
-        }
+        this.channel.writeAndFlush(message)
     }
 
     override fun flush() {
