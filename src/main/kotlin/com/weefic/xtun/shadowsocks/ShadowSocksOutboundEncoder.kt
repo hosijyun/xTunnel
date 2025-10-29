@@ -13,8 +13,8 @@ class ShadowSocksOutboundEncoder(
     private val cipherProvider: StreamCipherProvider,
 ) : ChannelOutboundHandlerAdapter() {
     private val iv: ByteArray
+    private val cipher: StreamCipher
     private var ivWrote = false
-    private var cipher: StreamCipher
 
     init {
         this.iv = ByteArray(this.cipherProvider.headerLength)
@@ -23,13 +23,21 @@ class ShadowSocksOutboundEncoder(
     }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        val output = msg as ByteBuf
-        this.cipher.process(output)
-        if (!this.ivWrote) {
-            this.ivWrote = true
-            val ivBuf = ctx.alloc().buffer().writeBytes(this.iv)
-            val buf = ctx.alloc().compositeBuffer(2).addComponents(true, ivBuf, output)
-            ctx.write(buf, promise)
+        if (msg is ByteBuf) {
+            try {
+                this.cipher.process(msg)
+            } catch (e: Exception) {
+                msg.release()
+                throw e
+            }
+            if (!this.ivWrote) {
+                this.ivWrote = true
+                val ivBuf = ctx.alloc().buffer().writeBytes(this.iv)
+                val buf = ctx.alloc().compositeBuffer(2).addComponents(true, ivBuf, msg)
+                ctx.write(buf, promise)
+            } else {
+                ctx.write(msg, promise)
+            }
         } else {
             ctx.write(msg, promise)
         }

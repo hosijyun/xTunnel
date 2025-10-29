@@ -36,6 +36,11 @@ object ServerConnectionFactory {
                 this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
             }
 
+            is TunnelOutboundConfig.Trojan -> {
+                val serverAddress = InetSocketAddress.createUnresolved(outboundConfig.host, outboundConfig.port)
+                this.connect0(tunnel, eventLoop, outboundConfig, localAddress, serverAddress, address, completeHandler)
+            }
+
             is TunnelOutboundConfig.Blackhole -> {
                 BlackholeConnection(tunnel, eventLoop)
                 completeHandler.complete(true)

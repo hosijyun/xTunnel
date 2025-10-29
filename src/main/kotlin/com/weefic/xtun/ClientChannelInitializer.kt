@@ -4,6 +4,7 @@ import com.weefic.xtun.handlers.InboundHttpRequestDecoder
 import com.weefic.xtun.inbound.*
 import com.weefic.xtun.shadowsocks.ShadowSocksHostDecoder
 import com.weefic.xtun.shadowsocks.config
+import com.weefic.xtun.trojan.TrojanHeaderInboundHandler
 import com.weefic.xtun.web.WebConfig
 import com.weefic.xtun.web.WebServerHandler
 import io.netty.channel.ChannelInitializer
@@ -85,12 +86,12 @@ class ClientChannelInitializer(val route: TunnelRoute, val webConfig: WebConfig?
                 }
 
                 is TunnelInboundConfig.Trojan -> {
-                    pipeline.addLast(ClientConnectionTrojanInboundHandler(tunnel.connectionId, inbound.passwords))
+                    pipeline.addLast(TrojanHeaderInboundHandler.HANDLER_NAME, TrojanHeaderInboundHandler(tunnel.connectionId, inbound.passwords))
                     pipeline.addLast(tunnel.clientConnection)
                 }
 
                 is TunnelInboundConfig.VMess -> {
-                    pipeline.addLast(ClientConnectionVMessInboundHandler(tunnel.connectionId, listOf()))
+                    pipeline.addLast(VMessRequestHeaderDecoder.NAME, VMessRequestHeaderDecoder(tunnel.connectionId, listOf()))
                     pipeline.addLast(tunnel.clientConnection)
                 }
 

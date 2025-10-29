@@ -49,8 +49,9 @@ class ShadowSocksInboundDecoder(
         }
     }
 
-    override fun channelActive(ctx: ChannelHandlerContext?) {
+    override fun channelActive(ctx: ChannelHandlerContext) {
         this.cipher?.close()
+        this.cipher = null
         super.channelActive(ctx)
     }
 }

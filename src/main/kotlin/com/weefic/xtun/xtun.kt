@@ -67,7 +67,6 @@ fun xtun(config: TunnelConfig, pac: Map<String, PAC>? = null, webConfig: WebConf
                     LOG.error("Failed to start the proxy '{}' on {}:{}.", name, bindingHost, bindingPort, it.cause())
                 }
             }
-            bootstrap.bind(bindingHost, bindingPort)
         }
         for (bind in binds) {
             try {

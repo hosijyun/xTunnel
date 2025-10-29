@@ -2,11 +2,12 @@ package com.weefic.xtun.shadowsocks
 
 import com.weefic.xtun.shadowsocks.cipher.AEADCipher
 import com.weefic.xtun.shadowsocks.cipher.AEADCipherProvider
-import com.weefic.xtun.utils.Endian
 import io.netty.buffer.ByteBuf
+import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelOutboundHandlerAdapter
 import io.netty.channel.ChannelPromise
+import org.slf4j.LoggerFactory
 import java.lang.Integer.min
 import kotlin.random.Random
 
@@ -15,7 +16,13 @@ class ShadowSocksOutboundAEADEncoder(
     private val cipherProvider: AEADCipherProvider,
 ) : ChannelOutboundHandlerAdapter() {
     companion object {
-        private val MAX_MESSAGE_LENGTH = 0x3FFF
+        private val LOG = LoggerFactory.getLogger(ShadowSocksOutboundAEADEncoder::class.java)
+
+        // Payload length is a 2-byte big-endian unsigned integer capped at 0x3FFF.
+        // The higher two bits are reserved and must be set to zero.
+        // Payload is therefore limited to 16*1024 - 1 bytes.
+        // @see https://github.com/shadowsocks/shadowsocks-org/wiki/AEAD-Ciphers
+        private val MAX_PAYLOAD_SIZE = 0x3FFF
     }
 
     private val salt: ByteArray
@@ -28,54 +35,38 @@ class ShadowSocksOutboundAEADEncoder(
         this.cipher = cipherProvider.createCipherForShadowsocks(true, this.password, this.salt)
     }
 
-    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        val data = msg as ByteBuf
+    override fun write(ctx: ChannelHandlerContext, data: Any, promise: ChannelPromise) {
+        if (data !is ByteBuf) {
+            ctx.write(data, promise)
+            return
+        }
         val dataSize = data.readableBytes()
         if (dataSize == 0) {
-            ctx.write(msg, promise)
-        } else {
-            val tagSize = this.cipherProvider.tagSize
-            val groupCount = (dataSize - 1) / MAX_MESSAGE_LENGTH + 1
-            val messageLength = dataSize + groupCount * (2 + tagSize + tagSize)
-            val message = ctx.alloc().buffer(messageLength)
-            val buffer = ctx.alloc().heapBuffer(MAX_MESSAGE_LENGTH)
-            buffer.ensureWritable(MAX_MESSAGE_LENGTH)
-            val bufferBytes = buffer.array()
-            val bufferOffset = buffer.arrayOffset() + buffer.readerIndex()
-            try {
-                var processedDataSize = 0
-                for (i in 0 until groupCount) {
-                    val availableDataSize = dataSize - processedDataSize
-                    val groupDataSize = min(availableDataSize, MAX_MESSAGE_LENGTH)
-                    // 处理长度
-                    Endian.BE.putShort(bufferBytes, bufferOffset, groupDataSize.toShort())
-                    val encryptedGroupDataSize = this.cipher.process(bufferBytes, bufferOffset, 2)
-                    message.writeBytes(encryptedGroupDataSize)
-                    // 处理数据
-                    data.readBytes(bufferBytes, bufferOffset, groupDataSize)
-                    val encryptedData = this.cipher.process(bufferBytes, bufferOffset, groupDataSize)
-                    message.writeBytes(encryptedData)
-                    processedDataSize += groupDataSize
-                }
-                check(message.readableBytes() == messageLength)
-            } catch (e: Exception) {
-                ctx.close()
-                message.release()
-                e.printStackTrace()
-                return
-            } finally {
-                buffer.release()
-            }
-
+            ctx.write(data, promise)
+            return
+        }
+        val message = ctx.alloc().compositeBuffer()
+        try {
             if (!this.saltWrote) {
                 this.saltWrote = true
-                val saltBuf = ctx.alloc().buffer().writeBytes(this.salt)
-                val buf = ctx.alloc().compositeBuffer(2).addComponents(true, saltBuf, message)
-                ctx.write(buf, promise)
-            } else {
-                ctx.write(message, promise)
+                message.addComponent(true, Unpooled.wrappedBuffer(this.salt))
             }
-        }
+            while (true) {
+                val readSize = min(MAX_PAYLOAD_SIZE, data.readableBytes())
+                if (readSize == 0) {
+                    break
+                }
+                val sizeBuf = ctx.alloc().heapBuffer(2 + this.cipherProvider.tagSize)
+                sizeBuf.writeShort(readSize)
+                message.addComponent(true, this.cipher.process(sizeBuf))
 
+                val dataBuf = data.readRetainedSlice(readSize)
+                message.addComponent(true, this.cipher.process(dataBuf))
+            }
+            ctx.write(message.retain(), promise)
+        } finally {
+            message.release()
+            data.release()
+        }
     }
 }

@@ -176,6 +176,7 @@ sealed class TunnelInboundConfig {
     JsonSubTypes.Type(name = "http", value = TunnelOutboundConfig.Http::class),
     JsonSubTypes.Type(name = "socks5", value = TunnelOutboundConfig.Socks5::class),
     JsonSubTypes.Type(name = "shadowsocks", value = TunnelOutboundConfig.Shadowsocks::class),
+    JsonSubTypes.Type(name = "trojan", value = TunnelOutboundConfig.Trojan::class),
 )
 sealed class TunnelOutboundConfig {
     class Direct() : TunnelOutboundConfig()
@@ -189,20 +190,30 @@ sealed class TunnelOutboundConfig {
     class Http(
         @JsonProperty(required = true) val host: String,
         @JsonProperty(required = true) val port: Int,
-        @JsonProperty(required = false) val user: UserCredential? = null
+        @JsonProperty(required = false) val user: UserCredential? = null,
+        @JsonProperty(required = false) val tls: Boolean? = null,
     ) : TunnelOutboundConfig()
 
     data class Socks5(
         @JsonProperty(required = true) val host: String,
         @JsonProperty(required = true) val port: Int,
-        @JsonProperty(required = false) val user: UserCredential? = null
+        @JsonProperty(required = false) val user: UserCredential? = null,
+        @JsonProperty(required = false) val tls: Boolean? = null,
     ) : TunnelOutboundConfig()
 
     data class Shadowsocks(
         @JsonProperty(required = true) val host: String,
         @JsonProperty(required = true) val port: Int,
         @JsonProperty(required = true) val method: ShadowsocksEncryptionMethod,
-        @JsonProperty(required = true) val password: String
+        @JsonProperty(required = true) val password: String,
+        @JsonProperty(required = false) val tls: Boolean? = null,
+    ) : TunnelOutboundConfig()
+
+    data class Trojan(
+        @JsonProperty(required = true) val host: String,
+        @JsonProperty(required = true) val port: Int,
+        @JsonProperty(required = true) val password: String,
+        @JsonProperty(required = false) val tls: Boolean? = null,
     ) : TunnelOutboundConfig()
 }
 

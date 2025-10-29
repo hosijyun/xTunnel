@@ -10,11 +10,11 @@ repositories {
 }
 
 dependencies {
-    api("io.netty:netty-all:4.2.2.Final")
+    api("io.netty:netty-all:4.2.7.Final")
     // https://mvnrepository.com/artifact/io.netty/netty-codec-native-quic
-    api("io.netty:netty-codec-native-quic:4.2.2.Final")
+    api("io.netty:netty-codec-native-quic:4.2.7.Final")
     // https://mvnrepository.com/artifact/io.netty/netty-codec-classes-quic
-    api("io.netty:netty-codec-classes-quic:4.2.2.Final")
+    api("io.netty:netty-codec-classes-quic:4.2.7.Final")
 
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.10.2")
     api("ch.qos.logback:logback-classic:1.4.11")

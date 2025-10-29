@@ -2,16 +2,19 @@ package com.weefic.xtun.shadowsocks
 
 import com.weefic.xtun.shadowsocks.cipher.AEADCipher
 import com.weefic.xtun.shadowsocks.cipher.AEADCipherProvider
-import com.weefic.xtun.utils.Endian
 import io.netty.buffer.ByteBuf
-import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.ByteToMessageDecoder
+import org.slf4j.LoggerFactory
 
 class ShadowSocksInboundAEADDecoder(
     private val password: String,
     private val cipherProvider: AEADCipherProvider
 ) : ByteToMessageDecoder() {
+    companion object {
+        private val LOG = LoggerFactory.getLogger(ShadowSocksInboundAEADDecoder::class.java)
+    }
+
     private var cipher: AEADCipher? = null
     private var payloadLength: Int = 0
 
@@ -31,35 +34,24 @@ class ShadowSocksInboundAEADDecoder(
         while (true) {
             if (this.payloadLength == 0) {
                 // Read payload length
-                if (input.readableBytes() >= 2 + this.cipherProvider.tagSize) {
-                    val encryptedPayloadLength = ByteArray(2 + this.cipherProvider.tagSize)
-                    input.readBytes(encryptedPayloadLength)
+                val requireDataSize = 2 + this.cipherProvider.tagSize
+                if (input.readableBytes() >= requireDataSize) {
+                    val plain = cipher.process(input.readRetainedSlice(requireDataSize))
                     try {
-                        val decryptedPayloadLength = cipher.process(encryptedPayloadLength)
-                        this.payloadLength = Endian.BE.getShort(decryptedPayloadLength, 0).toInt()
-                        check(this.payloadLength > 0 && this.payloadLength <= 0x3FFF) { "Bad payload length : $payloadLength" }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        ctx.close()
-                        return
+                        this.payloadLength = plain.readShort().toInt() and 0xFFFF
+                    } finally {
+                        plain.release()
                     }
                 } else {
                     return
                 }
             } else {
                 // Read payload
-                if (input.readableBytes() >= this.payloadLength + this.cipherProvider.tagSize) {
-                    val encryptedPayload = ByteArray(this.payloadLength + this.cipherProvider.tagSize)
-                    input.readBytes(encryptedPayload)
+                val requireSize = this.payloadLength + this.cipherProvider.tagSize
+                if (input.readableBytes() >= requireSize) {
                     this.payloadLength = 0
-                    try {
-                        val decryptedPayload = cipher.process(encryptedPayload)
-                        out.add(Unpooled.wrappedBuffer(decryptedPayload))
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        ctx.close()
-                        return
-                    }
+                    val plain = cipher.process(input.readRetainedSlice(requireSize))
+                    out.add(plain)
                 } else {
                     return
                 }

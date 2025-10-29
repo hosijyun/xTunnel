@@ -1,6 +1,10 @@
 package com.weefic.xtun.shadowsocks.cipher
 
+import io.netty.buffer.ByteBuf
+
 interface AEADCipher {
+    fun process(buffer: ByteBuf): ByteBuf
+
     fun process(data: ByteArray): ByteArray {
         return this.process(data, 0, data.size)
     }
