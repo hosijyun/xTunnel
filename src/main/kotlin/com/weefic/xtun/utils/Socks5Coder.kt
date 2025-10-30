@@ -9,7 +9,7 @@ import java.net.InetSocketAddress
 object Socks5Coder {
     private val ATYPE_IPV4 = 0x1.toByte()
     private val ATYPE_DOMAIN = 0x3.toByte()
-    private val ATYPE_IPV6 = 0x6.toByte()
+    private val ATYPE_IPV6 = 0x4.toByte()
 
     fun decodeAddress(buf: ByteBuf): InetSocketAddress {
         val type = buf.readByte()
